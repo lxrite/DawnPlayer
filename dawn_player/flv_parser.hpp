@@ -35,6 +35,8 @@ struct audio_special_config {
 };
 
 class flv_parser {
+private:
+    std::uint32_t length_size_minus_one;
 public:
     flv_parser();
 

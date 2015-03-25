@@ -17,6 +17,7 @@ namespace dawn_player {
 namespace parser {
 
 flv_parser::flv_parser()
+    : length_size_minus_one(0)
 {
 }
 
@@ -389,16 +390,15 @@ parse_result flv_parser::parse_flv_tags(const std::uint8_t* data, size_t size, s
                     //                                    1, or 3 corresponding to a length encoded with 1, 2, or 4 bytes,
                     //                                    respectively. 
                     auto length_size_minus_one_flag = data[offset++] & 0x03;
-                    std::uint32_t length_size_minus_one;
                     switch (length_size_minus_one_flag) {
                         case 0:
-                            length_size_minus_one = 1;
+                            this->length_size_minus_one = 1;
                             break;
                         case 1:
-                            length_size_minus_one = 2;
+                            this->length_size_minus_one = 2;
                             break;
                         case 3:
-                            length_size_minus_one = 4;
+                            this->length_size_minus_one = 4;
                             break;
                         default:
                             return parse_result::error;
@@ -442,22 +442,24 @@ parse_result flv_parser::parse_flv_tags(const std::uint8_t* data, size_t size, s
                     // One or more NALUs
                     if (this->on_video_sample) {
                         dawn_player::sample::video_sample sample;
-                        std::uint32_t length_size_minus_one = 4;
+                        if (this->length_size_minus_one == 0) {
+                            return parse_result::error;
+                        }
                         std::uint32_t nalu_length = 0;
                         sample.timestamp = static_cast<std::int64_t>(static_cast<std::uint32_t>(timestamp | (timestamp_extended << 24))) * 10000;
                         while (tag_data_size > offset - tag_data_offset) {
-                            if (tag_data_size - (offset - tag_data_offset) < length_size_minus_one) {
+                            if (tag_data_size - (offset - tag_data_offset) < this->length_size_minus_one) {
                                 return parse_result::error;
                             }
-                            if (length_size_minus_one == 1) {
+                            if (this->length_size_minus_one == 1) {
                                 nalu_length = data[offset++];
                             }
-                            else if (length_size_minus_one == 2) {
+                            else if (this->length_size_minus_one == 2) {
                                 nalu_length = this->to_uint16_be(&data[offset]);
                                 offset += 2;
                             }
                             else {
-                                assert(length_size_minus_one == 4);
+                                assert(this->length_size_minus_one == 4);
                                 nalu_length = this->to_uint32_be(&data[offset]);
                                 offset += 4;
                             }
