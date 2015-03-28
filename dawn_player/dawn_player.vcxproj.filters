@@ -11,6 +11,7 @@
     <ClCompile Include="amf_types.cpp" />
     <ClCompile Include="flv_parser.cpp" />
     <ClCompile Include="samples.cpp" />
+    <ClCompile Include="flv_player.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
@@ -18,5 +19,6 @@
     <ClInclude Include="amf_types.hpp" />
     <ClInclude Include="flv_parser.hpp" />
     <ClInclude Include="samples.hpp" />
+    <ClInclude Include="flv_player.hpp" />
   </ItemGroup>
 </Project>

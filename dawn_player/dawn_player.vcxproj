@@ -126,12 +126,14 @@
     <ClInclude Include="amf_decode.hpp" />
     <ClInclude Include="amf_types.hpp" />
     <ClInclude Include="flv_parser.hpp" />
+    <ClInclude Include="flv_player.hpp" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="samples.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="amf_types.cpp" />
     <ClCompile Include="flv_parser.cpp" />
+    <ClCompile Include="flv_player.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>
