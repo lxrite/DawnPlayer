@@ -41,6 +41,7 @@ enum class open_result {
 
 public delegate void open_media_completed_handler(IMap<Platform::String^, Platform::String^>^ media_info);
 public delegate void get_sample_completed_handler(sample_type type, IMap<Platform::String^, Platform::Object^>^ sample_info);
+public delegate void error_occured_handler(Platform::String^ error_description);
 
 public ref class flv_player sealed {
 private:
@@ -66,7 +67,9 @@ private:
     std::thread parse_thread;
 
     bool is_all_sample_read;
+    bool is_error_ocurred;
     bool is_closing;
+    bool is_error_reported;
 public:
     flv_player();
     void set_source(IRandomAccessStream^ random_access_stream);
@@ -76,6 +79,7 @@ public:
 public:
     event open_media_completed_handler^ open_media_completed_event;
     event get_sample_completed_handler^ get_sample_competed_event;
+    event error_occured_handler^ error_occured_event;
 private:
     open_result do_open();
     void do_get_sample();
@@ -88,6 +92,7 @@ private:
 
     void register_callback_functions();
     void unregister_callback_functions();
+    void report_error(const wchar_t* error_description);
 
     void parse_thread_proc();
 

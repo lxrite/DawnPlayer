@@ -25,7 +25,9 @@ flv_player::flv_player() :
     is_audio_cfg_read(false),
     pending_sample_cnt(0),
     is_all_sample_read(false),
-    is_closing(false)
+    is_error_ocurred(false),
+    is_closing(false),
+    is_error_reported(false)
 {
 }
 
@@ -82,7 +84,9 @@ void flv_player::close()
     this->audio_sample_queue.clear();
     this->video_sample_queue.clear();
     this->is_all_sample_read = false;
+    this->is_error_ocurred = false;
     this->is_closing = false;
+    this->is_error_reported = false;
 }
 
 open_result flv_player::do_open()
@@ -301,9 +305,10 @@ void flv_player::do_get_sample()
         video_sample v_sample;
         sample_type type;
         bool is_ended = false;
+        bool is_error = false;
         {
             std::unique_lock<std::mutex> lck(this->mtx);
-            if (!this->is_all_sample_read &&
+            if (!this->is_all_sample_read && !this->is_error_ocurred &&
                 (this->audio_sample_queue.size() < BUFFER_QUEUE_DEFICIENT_SIZE ||
                 this->video_sample_queue.size() < BUFFER_QUEUE_DEFICIENT_SIZE)) {
                     this->sample_producer_cv.notify_one();
@@ -314,7 +319,7 @@ void flv_player::do_get_sample()
                     return true;
                 }
                 pending_cnt = this->pending_sample_cnt.load(std::memory_order_acquire);
-                if (this->is_all_sample_read) {
+                if (this->is_all_sample_read || this->is_error_ocurred) {
                     return true;
                 }
                 if (this->audio_sample_queue.empty() && this->video_sample_queue.empty()) {
@@ -378,8 +383,13 @@ void flv_player::do_get_sample()
             }
             if (type == sample_type::audio) {
                 if (this->audio_sample_queue.empty()) {
-                    assert(this->is_all_sample_read);
-                    is_ended = true;
+                    if (this->is_error_ocurred) {
+                        is_error = true;
+                    }
+                    else {
+                        assert(this->is_all_sample_read);
+                        is_ended = true;
+                    }
                 }
                 else {
                     a_sample = std::move(this->audio_sample_queue.front());
@@ -388,8 +398,13 @@ void flv_player::do_get_sample()
             }
             else {
                 if (this->video_sample_queue.empty()) {
-                    assert(this->is_all_sample_read);
-                    is_ended = true;
+                    if (this->is_error_ocurred) {
+                        is_error = true;
+                    }
+                    else {
+                        assert(this->is_all_sample_read);
+                        is_ended = true;
+                    }
                 }
                 else {
                     v_sample = std::move(this->video_sample_queue.front());
@@ -398,7 +413,7 @@ void flv_player::do_get_sample()
             }
         }
         Platform::Collections::Map<Platform::String^, Platform::Object^>^ sample_info = nullptr;
-        if (!is_ended) {
+        if (!is_ended && !is_error) {
             sample_info = ref new Platform::Collections::Map<Platform::String^, Platform::Object^>();
             if (type == sample_type::audio) {
                 sample_info->Insert(L"Timestamp",ref new Platform::String(std::to_wstring(a_sample.timestamp).c_str()));
@@ -419,7 +434,12 @@ void flv_player::do_get_sample()
                 sample_info->Insert(L"Data", sample_data_buffer);
             }
         }
-        this->get_sample_competed_event(type, sample_info);
+        if (is_error) {
+            this->report_error(L"An error occured while parsing FLV file body.");
+        }
+        else {
+            this->get_sample_competed_event(type, sample_info);
+        }
         dec_value = (type == sample_type::audio ? 1 : 0x10000);
     } while (this->pending_sample_cnt.fetch_sub(dec_value, std::memory_order_acq_rel) - dec_value != 0);
 }
@@ -517,10 +537,23 @@ void flv_player::unregister_callback_functions()
     this->flv_parser.on_video_sample = nullptr;
 }
 
+void flv_player::report_error(const wchar_t* error_description)
+{
+    if (!this->is_error_reported) {
+        this->is_error_reported = true;
+        this->error_occured_event(ref new Platform::String(error_description));
+    }
+}
+
 void flv_player::parse_thread_proc()
 {
     this->register_callback_functions();
-    if (this->do_open() == open_result::ok) {
+    auto open_res = this->do_open();
+    if (open_res == open_result::error) {
+        this->is_error_ocurred = true;
+        this->report_error(L"Failed to open flv file.");
+    }
+    else if (open_res == open_result::ok) {
         IBuffer^ buffer = ref new Buffer(65536);
         for (;;) {
             concurrency::task<IBuffer^> async_read_task;
@@ -544,36 +577,35 @@ void flv_player::parse_thread_proc()
                     break;
                 }
             }
-            if (buffer->Length == 0) {
-                std::unique_lock<std::mutex> lck(this->mtx);
-                this->is_all_sample_read = true;
-                this->sample_consumer_cv.notify_one();
-                this->sample_producer_cv.wait(lck, [this]() -> bool {
-                    return !this->is_all_sample_read || this->is_closing;
-                });
-                if (this->is_closing) {
-                    break;
+            parse_result parse_res = parse_result::ok;
+            if (buffer->Length != 0) {
+                this->read_buffer.reserve(this->read_buffer.size() + buffer->Length);
+                auto data_reader = Windows::Storage::Streams::DataReader::FromBuffer(buffer);
+                for (std::uint32_t i = 0; i != buffer->Length; ++i) {
+                    this->read_buffer.push_back(data_reader->ReadByte());
                 }
-                continue;
+                size_t bytes_consumed = 0;
+                parse_res = this->flv_parser.parse_flv_tags(this->read_buffer.data(), this->read_buffer.size(), bytes_consumed);
+                if (parse_res == parse_result::ok) {
+                    std::memmove(this->read_buffer.data(), this->read_buffer.data() + bytes_consumed, this->read_buffer.size() - bytes_consumed);
+                    this->read_buffer.resize(this->read_buffer.size() - bytes_consumed);
+                }
             }
-            this->read_buffer.reserve(this->read_buffer.size() + buffer->Length);
-            auto data_reader = Windows::Storage::Streams::DataReader::FromBuffer(buffer);
-            for (std::uint32_t i = 0; i != buffer->Length; ++i) {
-                this->read_buffer.push_back(data_reader->ReadByte());
-            }
-            size_t bytes_consumed = 0;
-            auto parse_result = this->flv_parser.parse_flv_tags(this->read_buffer.data(), this->read_buffer.size(), bytes_consumed);
-            if (parse_result != dawn_player::parser::parse_result::ok) {
-                break;
-            }
-            std::memmove(this->read_buffer.data(), this->read_buffer.data() + bytes_consumed, this->read_buffer.size() - bytes_consumed);
-            this->read_buffer.resize(this->read_buffer.size() - bytes_consumed);
-            this->sample_consumer_cv.notify_one();
             {
                 std::unique_lock<std::mutex> lck(this->mtx);
-                this->sample_producer_cv.wait(lck, [this]() {
+                if (buffer->Length == 0) {
+                    this->is_all_sample_read = true;
+                }
+                else if (parse_res != parse_result::ok) {
+                    this->is_error_ocurred = true;
+                }
+                this->sample_consumer_cv.notify_one();
+                this->sample_producer_cv.wait(lck, [this]() -> bool {
                     if (this->is_closing) {
                         return true;
+                    }
+                    if (this->is_all_sample_read || this->is_error_ocurred) {
+                        return false;
                     }
                     if (this->audio_sample_queue.size() < BUFFER_QUEUE_SUFFICIENT_SIZE || this->video_sample_queue.size() < BUFFER_QUEUE_SUFFICIENT_SIZE) {
                         return true;
