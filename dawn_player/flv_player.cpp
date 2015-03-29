@@ -13,6 +13,8 @@
 #include "amf_decode.hpp"
 #include "flv_player.hpp"
 
+using namespace dawn_player::parser;
+
 namespace dawn_player {
 
 static const size_t BUFFER_QUEUE_DEFICIENT_SIZE = 100;
@@ -54,6 +56,9 @@ void flv_player::close()
     {
         std::lock_guard<std::mutex> lck(this->mtx);
         this->is_closing = true;
+        if (this->async_read_operation) {
+            this->async_read_operation->Cancel();
+        }
     }
     this->sample_consumer_cv.notify_one();
     this->sample_producer_cv.notify_one();
@@ -83,10 +88,27 @@ void flv_player::close()
 open_result flv_player::do_open()
 {
     IBuffer^ buffer = ref new Buffer(65536);
-    this->async_read_operation = this->video_file_stream->ReadAsync(buffer, 65536, InputStreamOptions::None);
+    {
+        std::lock_guard<std::mutex> lck(this->mtx);
+        if (this->is_closing) {
+            return open_result::abort;
+        }
+        this->async_read_operation = this->video_file_stream->ReadAsync(buffer, this->flv_parser.first_tag_offset(), InputStreamOptions::None);
+    }
     auto async_read_task = concurrency::create_task(this->async_read_operation);
-    buffer = async_read_task.get();
-    if(buffer->Length < 13) {
+    try {
+        buffer = async_read_task.get();
+    }
+    catch (const concurrency::task_canceled&) {
+    }
+    {
+        std::lock_guard<std::mutex> lck(this->mtx);
+        this->async_read_operation = nullptr;
+        if (this->is_closing) {
+            return open_result::abort;
+        }
+    }
+    if(buffer->Length != this->flv_parser.first_tag_offset()) {
         return open_result::error;
     }
     this->read_buffer.reserve(buffer->Length);
@@ -95,17 +117,53 @@ open_result flv_player::do_open()
         this->read_buffer.push_back(data_reader->ReadByte());
     }
     size_t size_consumed = 0;
-    if (dawn_player::parser::parse_result::ok != this->flv_parser.parse_flv_header(this->read_buffer.data(), this->read_buffer.size(), size_consumed)) {
-        return open_result::error;
+    auto result = this->flv_parser.parse_flv_header(this->read_buffer.data(), this->read_buffer.size(), size_consumed);
+    if (result != parse_result::ok) {
+        return (result == parse_result::error ? open_result::error : open_result::abort);
     }
-    this->register_callback_functions();
-    this->flv_parser.parse_flv_tags(this->read_buffer.data() + 13, this->read_buffer.size() - 13, size_consumed);
-    this->unregister_callback_functions();
-    if (!(this->flv_meta_data && this->is_audio_cfg_read && this->is_video_cfg_read)) {
-        return open_result::error;
+    this->read_buffer.clear();
+    for (;;) {
+        {
+            std::lock_guard<std::mutex> lck(this->mtx);
+            if (this->is_closing) {
+                return open_result::abort;
+            }
+            this->async_read_operation = this->video_file_stream->ReadAsync(buffer, 65536, InputStreamOptions::None);
+        }
+        auto async_read_task = concurrency::create_task(this->async_read_operation);
+        try {
+            buffer = async_read_task.get();
+        }
+        catch (const concurrency::task_canceled&) {
+            return open_result::abort;
+        }
+        {
+            std::lock_guard<std::mutex> lck(this->mtx);
+            this->async_read_operation = nullptr;
+            if (this->is_closing) {
+                return open_result::abort;
+            }
+        }
+        if (buffer->Length == 0) {
+            return open_result::error;
+        }
+        this->read_buffer.reserve(this->read_buffer.size() + buffer->Length);
+        auto data_reader = Windows::Storage::Streams::DataReader::FromBuffer(buffer);
+        for (std::uint32_t i = 0; i != buffer->Length; ++i) {
+            this->read_buffer.push_back(data_reader->ReadByte());
+        }
+        result = this->flv_parser.parse_flv_tags(this->read_buffer.data(), this->read_buffer.size(), size_consumed);
+        if (result != parse_result::ok) {
+            return (result == parse_result::error ? open_result::error : open_result::abort);
+        }
+        if (size_consumed != 0) {
+            std::memmove(this->read_buffer.data(), this->read_buffer.data() + size_consumed, this->read_buffer.size() - size_consumed);
+            this->read_buffer.resize(this->read_buffer.size() - size_consumed);
+        }
+        if (this->flv_meta_data && this->is_audio_cfg_read && this->is_video_cfg_read) {
+            break;
+        }
     }
-    std::memmove(this->read_buffer.data(), this->read_buffer.data() + 13 + size_consumed, this->read_buffer.size() - 13 - size_consumed);
-    this->read_buffer.resize(this->read_buffer.size() - 13 - size_consumed);
 
     // duration: a DOUBLE indicating the total duration of the file in seconds
     std::shared_ptr<amf_number> duration;
@@ -461,13 +519,31 @@ void flv_player::unregister_callback_functions()
 
 void flv_player::parse_thread_proc()
 {
+    this->register_callback_functions();
     if (this->do_open() == open_result::ok) {
-        this->register_callback_functions();
         IBuffer^ buffer = ref new Buffer(65536);
         for (;;) {
-            this->async_read_operation = this->video_file_stream->ReadAsync(buffer, 65536, InputStreamOptions::None);
-            auto async_read_task = Concurrency::create_task(this->async_read_operation);
-            buffer = async_read_task.get();
+            concurrency::task<IBuffer^> async_read_task;
+            {
+                std::lock_guard<std::mutex> lck(this->mtx);
+                if (this->is_closing) {
+                    break;
+                }
+                this->async_read_operation = this->video_file_stream->ReadAsync(buffer, 65536, InputStreamOptions::None);
+                async_read_task = Concurrency::create_task(this->async_read_operation);
+            }
+            try {
+                buffer = async_read_task.get();
+            }
+            catch (const concurrency::task_canceled&) {
+            }
+            {
+                std::lock_guard<std::mutex> lck(this->mtx);
+                this->async_read_operation = nullptr;
+                if (this->is_closing) {
+                    break;
+                }
+            }
             if (buffer->Length == 0) {
                 std::unique_lock<std::mutex> lck(this->mtx);
                 this->is_all_sample_read = true;
@@ -509,8 +585,8 @@ void flv_player::parse_thread_proc()
                 }
             }
         }
-        this->unregister_callback_functions();
     }
+    this->unregister_callback_functions();
 }
 
 std::string flv_player::uint8_to_hex_string(const std::uint8_t* data, size_t size, bool uppercase) const
