@@ -492,7 +492,6 @@ bool flv_player::on_audio_sample(audio_sample&& sample)
         std::lock_guard<std::mutex> lck(this->mtx);
         this->audio_sample_queue.emplace_back(std::move(sample));
     }
-    this->sample_consumer_cv.notify_all();
     return true;
 }
 
@@ -505,7 +504,6 @@ bool flv_player::on_video_sample(video_sample&& sample)
         std::lock_guard<std::mutex> lck(this->mtx);
         this->video_sample_queue.emplace_back(std::move(sample));
     }
-    this->sample_consumer_cv.notify_all();
     return true;
 }
 
