@@ -500,6 +500,17 @@ size_t flv_parser::first_tag_offset() const
     return 13;
 }
 
+void flv_parser::reset()
+{
+    this->length_size_minus_one = 0;
+
+    this->on_script_tag = nullptr;
+    this->on_audio_specific_config = nullptr;
+    this->on_avc_decoder_configuration_record = nullptr;
+    this->on_audio_sample = nullptr;
+    this->on_video_sample = nullptr;
+}
+
 std::uint32_t flv_parser::to_uint32_be(const std::uint8_t* data)
 {
     union {

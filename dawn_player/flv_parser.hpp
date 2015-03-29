@@ -44,6 +44,8 @@ public:
     parse_result parse_flv_tags(const std::uint8_t* data, size_t size, size_t& bytes_consumed);
 
     size_t first_tag_offset() const;
+
+    void reset();
 public:
     std::function<bool(std::shared_ptr<dawn_player::amf::amf_base>, std::shared_ptr<dawn_player::amf::amf_base>)> on_script_tag;
     std::function<bool(const audio_special_config&)> on_audio_specific_config;
