@@ -47,14 +47,13 @@ private:
     IRandomAccessStream^ video_file_stream;
     IAsyncOperationWithProgress<IBuffer^, std::uint32_t>^ async_read_operation;
     std::vector<std::uint8_t> read_buffer;
-    std::vector<std::uint8_t> swap_buffer;
     dawn_player::parser::flv_parser flv_parser;
 
     std::shared_ptr<dawn_player::amf::amf_ecma_array> flv_meta_data;
     bool is_video_cfg_read;
     bool is_audio_cfg_read;
-    std::string video_codec_private_data;
     std::string audio_codec_private_data;
+    std::string video_codec_private_data;
 
     std::atomic<std::uint32_t> pending_sample_cnt;
 
@@ -65,11 +64,15 @@ private:
     std::deque<video_sample> video_sample_queue;
 
     std::thread parse_thread;
+
+    bool is_all_sample_read;
+    bool is_closing;
 public:
     flv_player();
     void set_source(IRandomAccessStream^ random_access_stream);
     void open_async();
     void get_sample_async(sample_type type);
+    void close();
 public:
     event open_media_completed_handler^ open_media_completed_event;
     event get_sample_completed_handler^ get_sample_competed_event;

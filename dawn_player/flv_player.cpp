@@ -21,7 +21,9 @@ static const size_t BUFFER_QUEUE_SUFFICIENT_SIZE = 2000;
 flv_player::flv_player() :
     is_video_cfg_read(false),
     is_audio_cfg_read(false),
-    pending_sample_cnt(0)
+    pending_sample_cnt(0),
+    is_all_sample_read(false),
+    is_closing(false)
 {
 }
 
@@ -45,6 +47,37 @@ void flv_player::get_sample_async(sample_type type)
             this->do_get_sample();
         });
     }
+}
+
+void flv_player::close()
+{
+    {
+        std::lock_guard<std::mutex> lck(this->mtx);
+        this->is_closing = true;
+    }
+    this->sample_consumer_cv.notify_one();
+    this->sample_producer_cv.notify_one();
+    if (this->parse_thread.joinable()) {
+        this->parse_thread.join();
+    }
+    while (this->pending_sample_cnt.load(std::memory_order_acquire) != 0) {
+        std::this_thread::yield();
+    }
+
+    // reset
+    this->video_file_stream = nullptr;
+    this->async_read_operation = nullptr;
+    this->read_buffer.clear();
+    this->flv_parser.reset();
+    this->flv_meta_data.reset();
+    this->is_video_cfg_read = false;
+    this->is_audio_cfg_read = false;
+    this->audio_codec_private_data.clear();
+    this->video_codec_private_data.clear();
+    this->audio_sample_queue.clear();
+    this->video_sample_queue.clear();
+    this->is_all_sample_read = false;
+    this->is_closing = false;
 }
 
 open_result flv_player::do_open()
@@ -209,15 +242,23 @@ void flv_player::do_get_sample()
         audio_sample a_sample;
         video_sample v_sample;
         sample_type type;
+        bool is_ended = false;
         {
             std::unique_lock<std::mutex> lck(this->mtx);
-            std::uint32_t pending_cnt = 0;
-            if (this->audio_sample_queue.size() < BUFFER_QUEUE_DEFICIENT_SIZE ||
-                this->video_sample_queue.size() < BUFFER_QUEUE_DEFICIENT_SIZE) {
+            if (!this->is_all_sample_read &&
+                (this->audio_sample_queue.size() < BUFFER_QUEUE_DEFICIENT_SIZE ||
+                this->video_sample_queue.size() < BUFFER_QUEUE_DEFICIENT_SIZE)) {
                     this->sample_producer_cv.notify_one();
             }
+            std::uint32_t pending_cnt = 0;
             this->sample_consumer_cv.wait(lck, [this, &pending_cnt]() -> bool {
+                if (this->is_closing) {
+                    return true;
+                }
                 pending_cnt = this->pending_sample_cnt.load(std::memory_order_acquire);
+                if (this->is_all_sample_read) {
+                    return true;
+                }
                 if (this->audio_sample_queue.empty() && this->video_sample_queue.empty()) {
                     return false;
                 }
@@ -229,47 +270,96 @@ void flv_player::do_get_sample()
                 }
                 return true;
             });
-            if (this->audio_sample_queue.empty() || (pending_cnt & 0xffff) == 0) {
-                type = sample_type::video;
+            if (this->is_closing) {
+                this->pending_sample_cnt.store(0, std::memory_order_release);
+                return;
             }
-            else if (this->video_sample_queue.empty() || (pending_cnt & 0xffff0000) == 0) {
-                type = sample_type::audio;
-            }
-            else {
-                if (this->audio_sample_queue[0].timestamp < this->video_sample_queue[0].timestamp) {
-                    type = sample_type::audio;
+            if (!this->audio_sample_queue.empty()) {
+                if (!this->video_sample_queue.empty()) {
+                    if ((pending_cnt & 0xffff0000) == 0) {
+                        type = sample_type::audio;
+                    }
+                    else if ((pending_cnt & 0xffff) == 0) {
+                        type = sample_type::video;
+                    }
+                    else {
+                        if (this->audio_sample_queue.front().timestamp < this->video_sample_queue.front().timestamp) {
+                            type = sample_type::audio;
+                        }
+                        else {
+                            type = sample_type::video;
+                        }
+                    }
                 }
                 else {
-                    type = sample_type::video;
+                    if ((pending_cnt & 0xffff) != 0) {
+                        type = sample_type::audio;
+                    }
+                    else {
+                        type = sample_type::video;
+                    }
+                }
+            }
+            else {
+                if (!this->video_sample_queue.empty()) {
+                    if ((pending_cnt & 0xffff0000) != 0) {
+                        type = sample_type::video;
+                    }
+                    else {
+                        type = sample_type::audio;
+                    }
+                }
+                else {
+                    if ((pending_cnt & 0xffff) != 0) {
+                        type = sample_type::audio;
+                    }
+                    else {
+                        type = sample_type::video;
+                    }
                 }
             }
             if (type == sample_type::audio) {
-                a_sample = std::move(this->audio_sample_queue.front());
-                this->audio_sample_queue.pop_front();
+                if (this->audio_sample_queue.empty()) {
+                    assert(this->is_all_sample_read);
+                    is_ended = true;
+                }
+                else {
+                    a_sample = std::move(this->audio_sample_queue.front());
+                    this->audio_sample_queue.pop_front();
+                }
             }
             else {
-                v_sample = std::move(this->video_sample_queue.front());
-                this->video_sample_queue.pop_front();
+                if (this->video_sample_queue.empty()) {
+                    assert(this->is_all_sample_read);
+                    is_ended = true;
+                }
+                else {
+                    v_sample = std::move(this->video_sample_queue.front());
+                    this->video_sample_queue.pop_front();
+                }
             }
         }
-        auto sample_info = ref new Platform::Collections::Map<Platform::String^, Platform::Object^>();
-        if (type == sample_type::audio) {
-            sample_info->Insert(L"Timestamp",ref new Platform::String(std::to_wstring(a_sample.timestamp).c_str()));
-            auto data_writer = ref new DataWriter();
-            for(auto byte : a_sample.data) {
-                data_writer->WriteByte(byte);
+        Platform::Collections::Map<Platform::String^, Platform::Object^>^ sample_info = nullptr;
+        if (!is_ended) {
+            sample_info = ref new Platform::Collections::Map<Platform::String^, Platform::Object^>();
+            if (type == sample_type::audio) {
+                sample_info->Insert(L"Timestamp",ref new Platform::String(std::to_wstring(a_sample.timestamp).c_str()));
+                auto data_writer = ref new DataWriter();
+                for(auto byte : a_sample.data) {
+                    data_writer->WriteByte(byte);
+                }
+                IBuffer^ sample_data_buffer = data_writer->DetachBuffer();
+                sample_info->Insert(L"Data", sample_data_buffer);
             }
-            IBuffer^ sample_data_buffer = data_writer->DetachBuffer();
-            sample_info->Insert(L"Data", sample_data_buffer);
-        }
-        else {
-            sample_info->Insert(L"Timestamp",ref new Platform::String(std::to_wstring(v_sample.timestamp).c_str()));
-            auto data_writer = ref new DataWriter();
-            for(auto byte : v_sample.data) {
-                data_writer->WriteByte(byte);
+            else {
+                sample_info->Insert(L"Timestamp",ref new Platform::String(std::to_wstring(v_sample.timestamp).c_str()));
+                auto data_writer = ref new DataWriter();
+                for(auto byte : v_sample.data) {
+                    data_writer->WriteByte(byte);
+                }
+                IBuffer^ sample_data_buffer = data_writer->DetachBuffer();
+                sample_info->Insert(L"Data", sample_data_buffer);
             }
-            IBuffer^ sample_data_buffer = data_writer->DetachBuffer();
-            sample_info->Insert(L"Data", sample_data_buffer);
         }
         this->get_sample_competed_event(type, sample_info);
         dec_value = (type == sample_type::audio ? 1 : 0x10000);
@@ -372,19 +462,29 @@ void flv_player::unregister_callback_functions()
 void flv_player::parse_thread_proc()
 {
     if (this->do_open() == open_result::ok) {
-        IBuffer^ buffer = ref new Buffer(65536);
-        this->async_read_operation = this->video_file_stream->ReadAsync(buffer, 65536, InputStreamOptions::None);
-        auto async_read_task = Concurrency::create_task(this->async_read_operation);
-        buffer = async_read_task.get();
         this->register_callback_functions();
-        for (; buffer->Length != 0;) {
+        IBuffer^ buffer = ref new Buffer(65536);
+        for (;;) {
+            this->async_read_operation = this->video_file_stream->ReadAsync(buffer, 65536, InputStreamOptions::None);
+            auto async_read_task = Concurrency::create_task(this->async_read_operation);
+            buffer = async_read_task.get();
+            if (buffer->Length == 0) {
+                std::unique_lock<std::mutex> lck(this->mtx);
+                this->is_all_sample_read = true;
+                this->sample_consumer_cv.notify_one();
+                this->sample_producer_cv.wait(lck, [this]() -> bool {
+                    return !this->is_all_sample_read || this->is_closing;
+                });
+                if (this->is_closing) {
+                    break;
+                }
+                continue;
+            }
             this->read_buffer.reserve(this->read_buffer.size() + buffer->Length);
             auto data_reader = Windows::Storage::Streams::DataReader::FromBuffer(buffer);
             for (std::uint32_t i = 0; i != buffer->Length; ++i) {
                 this->read_buffer.push_back(data_reader->ReadByte());
             }
-            this->async_read_operation = this->video_file_stream->ReadAsync(buffer, 65536, InputStreamOptions::None);
-            auto async_read_task = Concurrency::create_task(this->async_read_operation);
             size_t bytes_consumed = 0;
             auto parse_result = this->flv_parser.parse_flv_tags(this->read_buffer.data(), this->read_buffer.size(), bytes_consumed);
             if (parse_result != dawn_player::parser::parse_result::ok) {
@@ -396,13 +496,18 @@ void flv_player::parse_thread_proc()
             {
                 std::unique_lock<std::mutex> lck(this->mtx);
                 this->sample_producer_cv.wait(lck, [this]() {
+                    if (this->is_closing) {
+                        return true;
+                    }
                     if (this->audio_sample_queue.size() < BUFFER_QUEUE_SUFFICIENT_SIZE || this->video_sample_queue.size() < BUFFER_QUEUE_SUFFICIENT_SIZE) {
                         return true;
                     }
                     return false;
                 });
+                if (this->is_closing) {
+                    break;
+                }
             }
-            buffer = async_read_task.get();
         }
         this->unregister_callback_functions();
     }
