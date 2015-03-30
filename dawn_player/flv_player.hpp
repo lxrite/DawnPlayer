@@ -12,6 +12,8 @@
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
+#include <functional>
+#include <map>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -41,6 +43,7 @@ enum class open_result {
 
 public delegate void open_media_completed_handler(IMap<Platform::String^, Platform::String^>^ media_info);
 public delegate void get_sample_completed_handler(sample_type type, IMap<Platform::String^, Platform::Object^>^ sample_info);
+public delegate void seek_completed_handler(std::int64_t seek_to_time);
 public delegate void error_occured_handler(Platform::String^ error_description);
 
 public ref class flv_player sealed {
@@ -57,32 +60,41 @@ private:
     std::string video_codec_private_data;
 
     std::atomic<std::uint32_t> pending_sample_cnt;
+    std::atomic<bool> is_seek_pending;
 
     std::mutex mtx;
     std::condition_variable sample_consumer_cv;
     std::condition_variable sample_producer_cv;
+    std::condition_variable seeker_cv;
     std::deque<audio_sample> audio_sample_queue;
     std::deque<video_sample> video_sample_queue;
+    std::map<double, std::uint64_t, std::greater<double>> keyframes;
 
     std::thread parse_thread;
 
+    bool is_seeking;
+    bool is_closing;
+
+    bool is_sample_producer_working;
     bool is_all_sample_read;
     bool is_error_ocurred;
-    bool is_closing;
     bool is_error_reported;
 public:
     flv_player();
     void set_source(IRandomAccessStream^ random_access_stream);
     void open_async();
     void get_sample_async(sample_type type);
+    void seek_async(std::int64_t seek_to_time);
     void close();
 public:
     event open_media_completed_handler^ open_media_completed_event;
     event get_sample_completed_handler^ get_sample_competed_event;
+    event seek_completed_handler^ seek_completed_event;
     event error_occured_handler^ error_occured_event;
 private:
     open_result do_open();
     void do_get_sample();
+    void do_seek(std::int64_t seek_to_time);
 private:
     bool on_script_tag(std::shared_ptr<dawn_player::amf::amf_base> name, std::shared_ptr<dawn_player::amf::amf_base> value);
     bool on_avc_decoder_configuration_record(const std::vector<std::uint8_t>& sps, const std::vector<std::uint8_t>& pps);

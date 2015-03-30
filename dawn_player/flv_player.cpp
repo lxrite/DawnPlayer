@@ -24,9 +24,12 @@ flv_player::flv_player() :
     is_video_cfg_read(false),
     is_audio_cfg_read(false),
     pending_sample_cnt(0),
+    is_seek_pending(false),
+    is_seeking(false),
+    is_closing(false),
+    is_sample_producer_working(false),
     is_all_sample_read(false),
     is_error_ocurred(false),
-    is_closing(false),
     is_error_reported(false)
 {
 }
@@ -38,6 +41,7 @@ void flv_player::set_source(IRandomAccessStream^ random_access_stream)
 
 void flv_player::open_async()
 {
+    this->is_sample_producer_working = true;
     this->parse_thread = std::thread([this]() {
         this->parse_thread_proc();
     });
@@ -53,6 +57,19 @@ void flv_player::get_sample_async(sample_type type)
     }
 }
 
+void flv_player::seek_async(std::int64_t seek_to_time)
+{
+    if (this->keyframes.empty()) {
+        return;
+    }
+    if (!this->is_seek_pending.exchange(true, std::memory_order_acq_rel)) {
+        concurrency::create_async([this, seek_to_time] {
+            this->do_seek(seek_to_time);
+            this->is_seek_pending.store(false, std::memory_order_release);
+        });
+    }
+}
+
 void flv_player::close()
 {
     {
@@ -64,10 +81,14 @@ void flv_player::close()
     }
     this->sample_consumer_cv.notify_one();
     this->sample_producer_cv.notify_one();
+    this->seeker_cv.notify_one();
     if (this->parse_thread.joinable()) {
         this->parse_thread.join();
     }
     while (this->pending_sample_cnt.load(std::memory_order_acquire) != 0) {
+        std::this_thread::yield();
+    }
+    while (this->is_seek_pending.load(std::memory_order_acquire) != false) {
         std::this_thread::yield();
     }
 
@@ -83,9 +104,12 @@ void flv_player::close()
     this->video_codec_private_data.clear();
     this->audio_sample_queue.clear();
     this->video_sample_queue.clear();
+    this->keyframes.clear();
+    this->is_seeking = false;
+    this->is_closing = false;
+    this->is_sample_producer_working = false;
     this->is_all_sample_read = false;
     this->is_error_ocurred = false;
-    this->is_closing = false;
     this->is_error_reported = false;
 }
 
@@ -268,13 +292,33 @@ open_result flv_player::do_open()
     iter = this->flv_meta_data->find("keyframes");
     if (iter != this->flv_meta_data->end() && std::get<1>(*iter)->get_type() == amf_type::object) {
         keyframes = std::dynamic_pointer_cast<amf_object, amf_base>(std::get<1>(*iter));
+        try {
+            auto file_positions = std::dynamic_pointer_cast<amf_strict_array, amf_base>(keyframes->get_attribute_value("filepositions"));
+            auto times = std::dynamic_pointer_cast<amf_strict_array, amf_base>(keyframes->get_attribute_value("times"));
+            if (file_positions == nullptr || times == nullptr || file_positions->size() != times->size() || file_positions->size() == 0) {
+                return open_result::error;
+            }
+            std::transform(times->begin(), times->end(), file_positions->begin(), std::inserter(this->keyframes, this->keyframes.begin()),
+                [](const std::shared_ptr<amf_base>& time, const std::shared_ptr<amf_base>& file_position) {
+                    return std::make_pair(std::dynamic_pointer_cast<amf_number, amf_base>(time)->get_value(), static_cast<std::uint64_t>(std::dynamic_pointer_cast<amf_number,amf_base>(file_position)->get_value()));
+                }
+            );
+        }
+        catch (const std::bad_cast&) {
+            return open_result::error;
+        }
     }
     auto media_info = ref new Platform::Collections::Map<Platform::String^, Platform::String^>();
     if (!duration) {
         return open_result::error;
     }
     media_info->Insert(L"Duration", ref new Platform::String(std::to_wstring(duration->get_value() * 10000000).c_str()));
-    media_info->Insert(L"CanSeek", L"False");
+    if (!this->keyframes.empty()) {
+        media_info->Insert(L"CanSeek", L"True");
+    }
+    else {
+        media_info->Insert(L"CanSeek", L"False");
+    }
     std::wstring audio_codec_private_data_w;
     std::transform(this->audio_codec_private_data.begin(), this->audio_codec_private_data.end(), std::back_inserter(audio_codec_private_data_w), [](char ch) -> wchar_t {
         return static_cast<wchar_t>(ch);
@@ -315,7 +359,7 @@ void flv_player::do_get_sample()
             }
             std::uint32_t pending_cnt = 0;
             this->sample_consumer_cv.wait(lck, [this, &pending_cnt]() -> bool {
-                if (this->is_closing) {
+                if (this->is_closing || this->is_seeking) {
                     return true;
                 }
                 pending_cnt = this->pending_sample_cnt.load(std::memory_order_acquire);
@@ -333,7 +377,7 @@ void flv_player::do_get_sample()
                 }
                 return true;
             });
-            if (this->is_closing) {
+            if (this->is_closing || this->is_seeking) {
                 this->pending_sample_cnt.store(0, std::memory_order_release);
                 return;
             }
@@ -442,6 +486,55 @@ void flv_player::do_get_sample()
         }
         dec_value = (type == sample_type::audio ? 1 : 0x10000);
     } while (this->pending_sample_cnt.fetch_sub(dec_value, std::memory_order_acq_rel) - dec_value != 0);
+}
+
+void flv_player::do_seek(std::int64_t seek_to_time)
+{
+    double seek_to_time_sec = static_cast<double>(seek_to_time) / 10000000;
+    auto iter = this->keyframes.lower_bound(seek_to_time_sec);
+    std::uint64_t position = 0;
+    double time = 0.00;
+    if (iter == this->keyframes.end()) {
+        position = keyframes.rbegin()->second;
+        time = keyframes.rbegin()->first;
+    }
+    else {
+        position = iter->second;
+        time = iter->first;
+    }
+    {
+        std::unique_lock<std::mutex> lck(this->mtx);
+        this->is_seeking = true;
+        if (this->async_read_operation != nullptr) {
+            this->async_read_operation->Cancel();
+        }
+        this->sample_producer_cv.notify_one();
+        this->sample_consumer_cv.notify_one();
+        this->seeker_cv.wait(lck, [this]() -> bool {
+            return this->is_closing || !this->is_sample_producer_working;
+        });
+        if (this->is_closing) {
+            return;
+        }
+    }
+    while (this->pending_sample_cnt.load(std::memory_order_acquire) != 0) {
+        std::this_thread::yield();
+    }
+    {
+        std::lock_guard<std::mutex> lck(this->mtx);
+        if (this->is_closing) {
+            return;
+        }
+        this->read_buffer.clear();
+        this->audio_sample_queue.clear();
+        this->video_sample_queue.clear();
+        this->is_error_ocurred = false;
+        this->is_all_sample_read = false;
+        this->video_file_stream->Seek(position);
+        this->seek_completed_event(static_cast<std::int64_t>(time * 10000000));
+        this->is_seeking = false;
+    }
+    this->sample_producer_cv.notify_one();
 }
 
 bool flv_player::on_script_tag(std::shared_ptr<dawn_player::amf::amf_base> name, std::shared_ptr<dawn_player::amf::amf_base> value)
@@ -569,10 +662,25 @@ void flv_player::parse_thread_proc()
             catch (const concurrency::task_canceled&) {
             }
             {
-                std::lock_guard<std::mutex> lck(this->mtx);
+                std::unique_lock<std::mutex> lck(this->mtx);
                 this->async_read_operation = nullptr;
                 if (this->is_closing) {
                     break;
+                }
+                else if (this->is_seeking) {
+                    this->is_sample_producer_working = false;
+                    this->seeker_cv.notify_one();
+                    this->sample_producer_cv.wait(lck, [this]() -> bool {
+                        if (this->is_closing || !this->is_seeking) {
+                            return true;
+                        }
+                        return false;
+                    });
+                    if (this->is_closing) {
+                        break;
+                    }
+                    this->is_sample_producer_working = true;
+                    continue;
                 }
             }
             parse_result parse_res = parse_result::ok;
@@ -597,10 +705,15 @@ void flv_player::parse_thread_proc()
                 else if (parse_res != parse_result::ok) {
                     this->is_error_ocurred = true;
                 }
+                this->is_sample_producer_working = false;
                 this->sample_consumer_cv.notify_one();
+                this->seeker_cv.notify_one();
                 this->sample_producer_cv.wait(lck, [this]() -> bool {
                     if (this->is_closing) {
                         return true;
+                    }
+                    if (this->is_seeking) {
+                        return false;
                     }
                     if (this->is_all_sample_read || this->is_error_ocurred) {
                         return false;
@@ -613,6 +726,7 @@ void flv_player::parse_thread_proc()
                 if (this->is_closing) {
                     break;
                 }
+                this->is_sample_producer_working = true;
             }
         }
     }
