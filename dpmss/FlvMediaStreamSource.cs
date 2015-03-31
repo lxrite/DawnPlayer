@@ -7,36 +7,44 @@
 
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
-using System.Windows.Media;
 using System.Runtime.InteropServices.WindowsRuntime;
+using System.Windows.Media;
+using Windows.Storage.Streams;
+
+using dawn_player;
 
 namespace DawnPlayer
 {
     public class FlvMediaStreamSource : MediaStreamSource
     {
-        private dawn_player.flv_player flvPlayer;
-        MediaStreamDescription audioStreamDescription;
-        MediaStreamDescription videoStreamDescription;
-        Dictionary<MediaSampleAttributeKeys, string> emptySampleAttributes = new Dictionary<MediaSampleAttributeKeys, string>();
-        
-        public FlvMediaStreamSource()
+        private flv_player flvPlayer;
+        private Windows.Storage.Streams.IRandomAccessStream randomAccessStream;
+        private MediaStreamDescription audioStreamDescription;
+        private MediaStreamDescription videoStreamDescription;
+        private static Dictionary<MediaSampleAttributeKeys, string> emptySampleAttributes = new Dictionary<MediaSampleAttributeKeys, string>();
+
+        private FlvMediaStreamSource(IRandomAccessStream ras)
         {
-            flvPlayer = new dawn_player.flv_player();
-            flvPlayer.open_media_completed_event += OnOpenMediaCompleted;
-            flvPlayer.get_sample_competed_event += OnGetSampleCompleted;
-            flvPlayer.seek_completed_event += OnSeekCompleted;
-            flvPlayer.error_occured_event += OnErrorOcurred;
+            this.randomAccessStream = ras;
         }
 
-        public void SetStream(Windows.Storage.Streams.IRandomAccessStream randomAccessStream)
+        public static FlvMediaStreamSource Wrap(IRandomAccessStream ras)
         {
-            flvPlayer.set_source(randomAccessStream);
+            if (ras == null)
+            {
+                throw new ArgumentNullException("ArgumentNullException.");
+            }
+            return new FlvMediaStreamSource(ras);
         }
 
         protected override void CloseMedia()
         {
             flvPlayer.close();
+            flvPlayer.open_media_completed_event -= OnOpenMediaCompleted;
+            flvPlayer.get_sample_competed_event -= OnGetSampleCompleted;
+            flvPlayer.seek_completed_event -= OnSeekCompleted;
+            flvPlayer.error_occured_event -= OnErrorOcurred;
+            flvPlayer = null;
         }
 
         protected override void GetDiagnosticAsync(MediaStreamSourceDiagnosticKind diagnosticKind)
@@ -56,6 +64,12 @@ namespace DawnPlayer
 
         protected override void OpenMediaAsync()
         {
+            flvPlayer = new dawn_player.flv_player();
+            flvPlayer.set_source(randomAccessStream);
+            flvPlayer.open_media_completed_event += OnOpenMediaCompleted;
+            flvPlayer.get_sample_competed_event += OnGetSampleCompleted;
+            flvPlayer.seek_completed_event += OnSeekCompleted;
+            flvPlayer.error_occured_event += OnErrorOcurred;
             flvPlayer.open_async();
         }
 
@@ -90,7 +104,7 @@ namespace DawnPlayer
             videoStreamDescription = new MediaStreamDescription(MediaStreamType.Video, videoStreamAttributes);
             availableMediaStreams.Add(videoStreamDescription);
 
-            this.AudioBufferLength = 15;
+            AudioBufferLength = 15;
             ReportOpenMediaCompleted(mediaStreamAttributes, availableMediaStreams);
         }
 
@@ -103,22 +117,22 @@ namespace DawnPlayer
                 var sampleStream = sampleDataBuffer.AsStream();
                 if (type == dawn_player.sample_type.audio)
                 {
-                    ReportGetSampleCompleted(new MediaStreamSample(this.audioStreamDescription, sampleStream, 0, (long)sampleDataBuffer.Length, timeStamp, this.emptySampleAttributes));
+                    ReportGetSampleCompleted(new MediaStreamSample(audioStreamDescription, sampleStream, 0, (long)sampleDataBuffer.Length, timeStamp, emptySampleAttributes));
                 }
                 else
                 {
-                    ReportGetSampleCompleted(new MediaStreamSample(this.videoStreamDescription, sampleStream, 0, (long)sampleDataBuffer.Length, timeStamp, this.emptySampleAttributes));
+                    ReportGetSampleCompleted(new MediaStreamSample(videoStreamDescription, sampleStream, 0, (long)sampleDataBuffer.Length, timeStamp, emptySampleAttributes));
                 }
             }
             else
             {
                 if (type == dawn_player.sample_type.audio)
                 {
-                    this.ReportGetSampleCompleted(new MediaStreamSample(this.audioStreamDescription, null, 0, 0, 0, this.emptySampleAttributes));
+                    ReportGetSampleCompleted(new MediaStreamSample(audioStreamDescription, null, 0, 0, 0, emptySampleAttributes));
                 }
                 else
                 {
-                    this.ReportGetSampleCompleted(new MediaStreamSample(this.videoStreamDescription, null, 0, 0, 0, this.emptySampleAttributes));
+                    ReportGetSampleCompleted(new MediaStreamSample(videoStreamDescription, null, 0, 0, 0, emptySampleAttributes));
                 }
             }
         }
@@ -134,3 +148,4 @@ namespace DawnPlayer
         }
     }
 }
+
