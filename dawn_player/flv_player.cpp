@@ -359,8 +359,11 @@ void flv_player::do_get_sample()
             }
             std::uint32_t pending_cnt = 0;
             this->sample_consumer_cv.wait(lck, [this, &pending_cnt]() -> bool {
-                if (this->is_closing || this->is_seeking) {
+                if (this->is_closing) {
                     return true;
+                }
+                if (this->is_seeking) {
+                    return false;
                 }
                 pending_cnt = this->pending_sample_cnt.load(std::memory_order_acquire);
                 if (this->is_all_sample_read || this->is_error_ocurred) {
@@ -377,7 +380,7 @@ void flv_player::do_get_sample()
                 }
                 return true;
             });
-            if (this->is_closing || this->is_seeking) {
+            if (this->is_closing) {
                 this->pending_sample_cnt.store(0, std::memory_order_release);
                 return;
             }
@@ -509,19 +512,9 @@ void flv_player::do_seek(std::int64_t seek_to_time)
             this->async_read_operation->Cancel();
         }
         this->sample_producer_cv.notify_one();
-        this->sample_consumer_cv.notify_one();
         this->seeker_cv.wait(lck, [this]() -> bool {
             return this->is_closing || !this->is_sample_producer_working;
         });
-        if (this->is_closing) {
-            return;
-        }
-    }
-    while (this->pending_sample_cnt.load(std::memory_order_acquire) != 0) {
-        std::this_thread::yield();
-    }
-    {
-        std::lock_guard<std::mutex> lck(this->mtx);
         if (this->is_closing) {
             return;
         }
