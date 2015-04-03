@@ -48,7 +48,11 @@ public enum class get_sample_result {
     abort
 };
 
-public delegate void seek_completed_handler(std::int64_t seek_to_time);
+enum class seek_result {
+    ok,
+    ignore,
+    abort
+};
 
 public ref class flv_player sealed {
 private:
@@ -88,14 +92,12 @@ public:
     void set_source(IRandomAccessStream^ random_access_stream);
     IAsyncOperation<open_result>^ open_async(IMap<Platform::String^, Platform::String^>^ media_info);
     IAsyncOperation<get_sample_result>^ get_sample_async(sample_type type, IMap<Platform::String^, Platform::Object^>^ sample_info);
-    void seek_async(std::int64_t seek_to_time);
+    IAsyncOperation<std::int64_t>^ seek_async(std::int64_t seek_to_time);
     void close();
-public:
-    event seek_completed_handler^ seek_completed_event;
 private:
     open_result do_open(IMap<Platform::String^, Platform::String^>^ media_info);
     get_sample_result do_get_sample(sample_type type, IMap<Platform::String^, Platform::Object^>^ sample_info);
-    void do_seek(std::int64_t seek_to_time);
+    seek_result do_seek(std::int64_t& seek_to_time);
 private:
     bool on_script_tag(std::shared_ptr<dawn_player::amf::amf_base> name, std::shared_ptr<dawn_player::amf::amf_base> value);
     bool on_avc_decoder_configuration_record(const std::vector<std::uint8_t>& sps, const std::vector<std::uint8_t>& pps);

@@ -72,17 +72,25 @@ IAsyncOperation<get_sample_result>^ flv_player::get_sample_async(sample_type typ
     });
 }
 
-void flv_player::seek_async(std::int64_t seek_to_time)
+IAsyncOperation<std::int64_t>^ flv_player::seek_async(std::int64_t seek_to_time)
 {
     if (this->keyframes.empty()) {
-        return;
+        assert(false);
     }
-    if (!this->is_seek_pending.exchange(true, std::memory_order_acq_rel)) {
-        concurrency::create_async([this, seek_to_time] {
-            this->do_seek(seek_to_time);
-            this->is_seek_pending.store(false, std::memory_order_release);
-        });
+    if (this->is_seek_pending.exchange(true, std::memory_order_acq_rel)) {
+        assert(false);
     }
+    return concurrency::create_async([this, seek_to_time]() -> std::int64_t {
+        std::int64_t _seek_to_time = seek_to_time;
+        seek_result result = this->do_seek(_seek_to_time);
+        this->is_seek_pending.store(false, std::memory_order_release);
+        if (result == seek_result::ok) {
+            return _seek_to_time;
+        }
+        else {
+            return -1;
+        }
+    });
 }
 
 void flv_player::close()
@@ -449,7 +457,7 @@ get_sample_result flv_player::do_get_sample(sample_type type, IMap<Platform::Str
     return get_sample_result::ok;
 }
 
-void flv_player::do_seek(std::int64_t seek_to_time)
+seek_result flv_player::do_seek(std::int64_t& seek_to_time)
 {
     double seek_to_time_sec = static_cast<double>(seek_to_time) / 10000000;
     auto iter = this->keyframes.lower_bound(seek_to_time_sec);
@@ -474,7 +482,7 @@ void flv_player::do_seek(std::int64_t seek_to_time)
             return this->is_closing || !this->is_sample_producer_working;
         });
         if (this->is_closing) {
-            return;
+            return seek_result::abort;
         }
         this->read_buffer.clear();
         this->audio_sample_queue.clear();
@@ -482,10 +490,11 @@ void flv_player::do_seek(std::int64_t seek_to_time)
         this->is_error_ocurred = false;
         this->is_all_sample_read = false;
         this->video_file_stream->Seek(position);
-        this->seek_completed_event(static_cast<std::int64_t>(time * 10000000));
         this->is_seeking = false;
     }
     this->sample_producer_cv.notify_one();
+    seek_to_time = static_cast<std::int64_t>(time * 10000000);
+    return seek_result::ok;
 }
 
 bool flv_player::on_script_tag(std::shared_ptr<dawn_player::amf::amf_base> name, std::shared_ptr<dawn_player::amf::amf_base> value)

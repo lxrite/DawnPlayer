@@ -24,6 +24,7 @@ namespace DawnPlayer
         private static Dictionary<MediaSampleAttributeKeys, string> emptySampleAttributes = new Dictionary<MediaSampleAttributeKeys, string>();
         private bool isClosed = false;
         private bool isErrorOcurred = false;
+        private bool isSeeking = false;
 
         private FlvMediaStreamSource(IRandomAccessStream ras)
         {
@@ -42,7 +43,6 @@ namespace DawnPlayer
         protected override void CloseMedia()
         {
             flvPlayer.close();
-            flvPlayer.seek_completed_event -= OnSeekCompleted;
             flvPlayer = null;
             isClosed = true;
         }
@@ -101,7 +101,6 @@ namespace DawnPlayer
         {
             flvPlayer = new dawn_player.flv_player();
             flvPlayer.set_source(randomAccessStream);
-            flvPlayer.seek_completed_event += OnSeekCompleted;
             var mediaInfo = new Dictionary<string, string>();
             var open_result = await flvPlayer.open_async(mediaInfo);
             if (isClosed)
@@ -139,19 +138,25 @@ namespace DawnPlayer
             }
         }
 
-        protected override void SeekAsync(long seekToTime)
+        protected override async void SeekAsync(long seekToTime)
         {
-            flvPlayer.seek_async(seekToTime);
+            if (isSeeking)
+            {
+                return;
+            }
+            isSeeking = true;
+            var seekTo = await flvPlayer.seek_async(seekToTime);
+            isSeeking = false;
+            if (isErrorOcurred || isClosed || seekTo == -1)
+            {
+                return;
+            }
+            ReportSeekCompleted(seekTo);
         }
 
         protected override void SwitchMediaStreamAsync(MediaStreamDescription mediaStreamDescription)
         {
             throw new NotImplementedException();
-        }
-
-        private void OnSeekCompleted(long seekToTime)
-        {
-            ReportSeekCompleted(seekToTime);
         }
     }
 }
