@@ -62,14 +62,14 @@ IAsyncOperation<open_result>^ flv_player::open_async(IMap<Platform::String^, Pla
     });
 }
 
-void flv_player::get_sample_async(sample_type type)
+IAsyncOperation<get_sample_result>^ flv_player::get_sample_async(sample_type type, IMap<Platform::String^, Platform::Object^>^ sample_info)
 {
-    std::uint32_t inc_value = (type == sample_type::audio ? 1 : 0x10000);
-    if (this->pending_sample_cnt.fetch_add(inc_value, std::memory_order_acq_rel) == 0) {
-        concurrency::create_async([this]() {
-            this->do_get_sample();
-        });
-    }
+    this->pending_sample_cnt.fetch_add(1, std::memory_order_acq_rel);
+    return concurrency::create_async([this, type, sample_info]() -> get_sample_result {
+        get_sample_result result = this->do_get_sample(type, sample_info);
+        this->pending_sample_cnt.fetch_sub(1, std::memory_order_acq_rel);
+        return result;
+    });
 }
 
 void flv_player::seek_async(std::int64_t seek_to_time)
@@ -358,154 +358,95 @@ open_result flv_player::do_open(IMap<Platform::String^, Platform::String^>^ medi
     return open_result::ok;
 }
 
-void flv_player::do_get_sample()
+get_sample_result flv_player::do_get_sample(sample_type type, IMap<Platform::String^, Platform::Object^>^ sample_info)
 {
-    std::uint32_t dec_value;
-    do {
-        audio_sample a_sample;
-        video_sample v_sample;
-        sample_type type;
-        bool is_ended = false;
-        bool is_error = false;
-        {
-            std::unique_lock<std::mutex> lck(this->mtx);
-            if (!this->is_all_sample_read && !this->is_error_ocurred &&
-                (this->audio_sample_queue.size() < BUFFER_QUEUE_DEFICIENT_SIZE ||
-                this->video_sample_queue.size() < BUFFER_QUEUE_DEFICIENT_SIZE)) {
-                    this->sample_producer_cv.notify_one();
-            }
-            std::uint32_t pending_cnt = 0;
-            this->sample_consumer_cv.wait(lck, [this, &pending_cnt]() -> bool {
+    audio_sample a_sample;
+    video_sample v_sample;
+    {
+        std::unique_lock<std::mutex> lck (this->mtx);
+        if (!this->is_all_sample_read && !this->is_error_ocurred &&
+            (this->audio_sample_queue.size() < BUFFER_QUEUE_DEFICIENT_SIZE ||
+            this->video_sample_queue.size() < BUFFER_QUEUE_DEFICIENT_SIZE)) {
+                this->sample_producer_cv.notify_one();
+        }
+        if (type == sample_type::audio) {
+            this->sample_consumer_cv.wait(lck, [this]() -> bool {
                 if (this->is_closing) {
                     return true;
                 }
                 if (this->is_seeking) {
                     return false;
                 }
-                pending_cnt = this->pending_sample_cnt.load(std::memory_order_acquire);
                 if (this->is_all_sample_read || this->is_error_ocurred) {
                     return true;
                 }
-                if (this->audio_sample_queue.empty() && this->video_sample_queue.empty()) {
-                    return false;
-                }
-                if ((pending_cnt & 0xffff) == 0 && this->video_sample_queue.empty()) {
-                    return false;
-                }
-                if ((pending_cnt & 0xffff0000) == 0 && this->audio_sample_queue.empty()) {
-                    return false;
-                }
-                return true;
+                return !this->audio_sample_queue.empty();
             });
             if (this->is_closing) {
-                this->pending_sample_cnt.store(0, std::memory_order_release);
-                return;
+                return get_sample_result::abort;
             }
-            if (!this->audio_sample_queue.empty()) {
-                if (!this->video_sample_queue.empty()) {
-                    if ((pending_cnt & 0xffff0000) == 0) {
-                        type = sample_type::audio;
-                    }
-                    else if ((pending_cnt & 0xffff) == 0) {
-                        type = sample_type::video;
-                    }
-                    else {
-                        if (this->audio_sample_queue.front().timestamp < this->video_sample_queue.front().timestamp) {
-                            type = sample_type::audio;
-                        }
-                        else {
-                            type = sample_type::video;
-                        }
-                    }
+            if (this->audio_sample_queue.empty()) {
+                if (this->is_all_sample_read) {
+                    return get_sample_result::eos;
                 }
                 else {
-                    if ((pending_cnt & 0xffff) != 0) {
-                        type = sample_type::audio;
-                    }
-                    else {
-                        type = sample_type::video;
-                    }
+                    return get_sample_result::error;
                 }
             }
             else {
-                if (!this->video_sample_queue.empty()) {
-                    if ((pending_cnt & 0xffff0000) != 0) {
-                        type = sample_type::video;
-                    }
-                    else {
-                        type = sample_type::audio;
-                    }
-                }
-                else {
-                    if ((pending_cnt & 0xffff) != 0) {
-                        type = sample_type::audio;
-                    }
-                    else {
-                        type = sample_type::video;
-                    }
-                }
+                a_sample = std::move(this->audio_sample_queue.front());
+                this->audio_sample_queue.pop_front();
             }
-            if (type == sample_type::audio) {
-                if (this->audio_sample_queue.empty()) {
-                    if (this->is_error_ocurred) {
-                        is_error = true;
-                    }
-                    else {
-                        assert(this->is_all_sample_read);
-                        is_ended = true;
-                    }
-                }
-                else {
-                    a_sample = std::move(this->audio_sample_queue.front());
-                    this->audio_sample_queue.pop_front();
-                }
-            }
-            else {
-                if (this->video_sample_queue.empty()) {
-                    if (this->is_error_ocurred) {
-                        is_error = true;
-                    }
-                    else {
-                        assert(this->is_all_sample_read);
-                        is_ended = true;
-                    }
-                }
-                else {
-                    v_sample = std::move(this->video_sample_queue.front());
-                    this->video_sample_queue.pop_front();
-                }
-            }
-        }
-        Platform::Collections::Map<Platform::String^, Platform::Object^>^ sample_info = nullptr;
-        if (!is_ended && !is_error) {
-            sample_info = ref new Platform::Collections::Map<Platform::String^, Platform::Object^>();
-            if (type == sample_type::audio) {
-                sample_info->Insert(L"Timestamp",ref new Platform::String(std::to_wstring(a_sample.timestamp).c_str()));
-                auto data_writer = ref new DataWriter();
-                for(auto byte : a_sample.data) {
-                    data_writer->WriteByte(byte);
-                }
-                IBuffer^ sample_data_buffer = data_writer->DetachBuffer();
-                sample_info->Insert(L"Data", sample_data_buffer);
-            }
-            else {
-                sample_info->Insert(L"Timestamp",ref new Platform::String(std::to_wstring(v_sample.timestamp).c_str()));
-                auto data_writer = ref new DataWriter();
-                for(auto byte : v_sample.data) {
-                    data_writer->WriteByte(byte);
-                }
-                IBuffer^ sample_data_buffer = data_writer->DetachBuffer();
-                sample_info->Insert(L"Data", sample_data_buffer);
-            }
-        }
-        if (is_error) {
-            this->report_error(L"An error occured while parsing FLV file body.");
         }
         else {
-            this->get_sample_competed_event(type, sample_info);
+            this->sample_consumer_cv.wait(lck, [this]() -> bool {
+                if (this->is_closing) {
+                    return true;
+                }
+                if (this->is_seeking) {
+                    return false;
+                }
+                if (this->is_all_sample_read || this->is_error_ocurred) {
+                    return true;
+                }
+                return !this->video_sample_queue.empty();
+            });
+            if (this->is_closing) {
+                return get_sample_result::abort;
+            }
+            if (this->video_sample_queue.empty()) {
+                if (this->is_all_sample_read) {
+                    return get_sample_result::eos;
+                }
+                else {
+                    return get_sample_result::error;
+                }
+            }
+            else {
+                v_sample = std::move(this->video_sample_queue.front());
+                this->video_sample_queue.pop_front();
+            }
         }
-        dec_value = (type == sample_type::audio ? 1 : 0x10000);
-    } while (this->pending_sample_cnt.fetch_sub(dec_value, std::memory_order_acq_rel) - dec_value != 0);
+    }
+    if (type == sample_type::audio) {
+        sample_info->Insert(L"Timestamp",ref new Platform::String(std::to_wstring(a_sample.timestamp).c_str()));
+        auto data_writer = ref new DataWriter();
+        for(auto byte : a_sample.data) {
+            data_writer->WriteByte(byte);
+        }
+        IBuffer^ sample_data_buffer = data_writer->DetachBuffer();
+        sample_info->Insert(L"Data", sample_data_buffer);
+    }
+    else {
+        sample_info->Insert(L"Timestamp",ref new Platform::String(std::to_wstring(v_sample.timestamp).c_str()));
+        auto data_writer = ref new DataWriter();
+        for(auto byte : v_sample.data) {
+            data_writer->WriteByte(byte);
+        }
+        IBuffer^ sample_data_buffer = data_writer->DetachBuffer();
+        sample_info->Insert(L"Data", sample_data_buffer);
+    }
+    return get_sample_result::ok;
 }
 
 void flv_player::do_seek(std::int64_t seek_to_time)
@@ -636,14 +577,6 @@ void flv_player::unregister_callback_functions()
     this->flv_parser.on_audio_specific_config = nullptr;
     this->flv_parser.on_audio_sample = nullptr;
     this->flv_parser.on_video_sample = nullptr;
-}
-
-void flv_player::report_error(const wchar_t* error_description)
-{
-    if (!this->is_error_reported) {
-        this->is_error_reported = true;
-        this->error_occured_event(ref new Platform::String(error_description));
-    }
 }
 
 void flv_player::parse_flv_file_body()

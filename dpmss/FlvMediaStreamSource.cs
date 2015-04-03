@@ -23,6 +23,7 @@ namespace DawnPlayer
         private MediaStreamDescription videoStreamDescription;
         private static Dictionary<MediaSampleAttributeKeys, string> emptySampleAttributes = new Dictionary<MediaSampleAttributeKeys, string>();
         private bool isClosed = false;
+        private bool isErrorOcurred = false;
 
         private FlvMediaStreamSource(IRandomAccessStream ras)
         {
@@ -41,9 +42,7 @@ namespace DawnPlayer
         protected override void CloseMedia()
         {
             flvPlayer.close();
-            flvPlayer.get_sample_competed_event -= OnGetSampleCompleted;
             flvPlayer.seek_completed_event -= OnSeekCompleted;
-            flvPlayer.error_occured_event -= OnErrorOcurred;
             flvPlayer = null;
             isClosed = true;
         }
@@ -53,23 +52,56 @@ namespace DawnPlayer
             throw new NotImplementedException();
         }
 
-        protected override void GetSampleAsync(MediaStreamType mediaStreamType)
+        protected override async void GetSampleAsync(MediaStreamType mediaStreamType)
         {
             if (mediaStreamType == MediaStreamType.Script)
             {
                 return;
             }
             dawn_player.sample_type sampleType = mediaStreamType == MediaStreamType.Audio ? dawn_player.sample_type.audio : dawn_player.sample_type.video;
-            flvPlayer.get_sample_async(sampleType);
+            Dictionary<string, object> sampleInfo = new Dictionary<string, object>();
+            var result = await flvPlayer.get_sample_async(sampleType, sampleInfo);
+            if (isClosed || isErrorOcurred)
+            {
+                return;
+            }
+            if (result == get_sample_result.ok)
+            {
+                long timeStamp = Convert.ToInt64(sampleInfo["Timestamp"]);
+                var sampleDataBuffer = sampleInfo["Data"] as Windows.Storage.Streams.IBuffer;
+                var sampleStream = sampleDataBuffer.AsStream();
+                if (mediaStreamType == MediaStreamType.Audio)
+                {
+                    ReportGetSampleCompleted(new MediaStreamSample(audioStreamDescription, sampleStream, 0, (long)sampleDataBuffer.Length, timeStamp, emptySampleAttributes));
+                }
+                else
+                {
+                    ReportGetSampleCompleted(new MediaStreamSample(videoStreamDescription, sampleStream, 0, (long)sampleDataBuffer.Length, timeStamp, emptySampleAttributes));
+                }
+            }
+            else if (result == get_sample_result.eos)
+            {
+                if (mediaStreamType == MediaStreamType.Audio)
+                {
+                    ReportGetSampleCompleted(new MediaStreamSample(audioStreamDescription, null, 0, 0, 0, emptySampleAttributes));
+                }
+                else
+                {
+                    ReportGetSampleCompleted(new MediaStreamSample(videoStreamDescription, null, 0, 0, 0, emptySampleAttributes));
+                }
+            }
+            else if (result == get_sample_result.error)
+            {
+                isErrorOcurred = true;
+                ErrorOccurred("An error occured while parsing FLV file body.");
+            }
         }
 
         protected override async void OpenMediaAsync()
         {
             flvPlayer = new dawn_player.flv_player();
             flvPlayer.set_source(randomAccessStream);
-            flvPlayer.get_sample_competed_event += OnGetSampleCompleted;
             flvPlayer.seek_completed_event += OnSeekCompleted;
-            flvPlayer.error_occured_event += OnErrorOcurred;
             var mediaInfo = new Dictionary<string, string>();
             var open_result = await flvPlayer.open_async(mediaInfo);
             if (isClosed)
@@ -102,6 +134,7 @@ namespace DawnPlayer
             }
             else if (open_result == open_result.error)
             {
+                isErrorOcurred = true;
                 ErrorOccurred("Failed to open flv file.");
             }
         }
@@ -116,43 +149,9 @@ namespace DawnPlayer
             throw new NotImplementedException();
         }
 
-        private void OnGetSampleCompleted(dawn_player.sample_type type, IDictionary<string, Object> sampleInfo)
-        {
-            if (sampleInfo != null)
-            {
-                long timeStamp = Convert.ToInt64(sampleInfo["Timestamp"]);
-                var sampleDataBuffer = sampleInfo["Data"] as Windows.Storage.Streams.IBuffer;
-                var sampleStream = sampleDataBuffer.AsStream();
-                if (type == dawn_player.sample_type.audio)
-                {
-                    ReportGetSampleCompleted(new MediaStreamSample(audioStreamDescription, sampleStream, 0, (long)sampleDataBuffer.Length, timeStamp, emptySampleAttributes));
-                }
-                else
-                {
-                    ReportGetSampleCompleted(new MediaStreamSample(videoStreamDescription, sampleStream, 0, (long)sampleDataBuffer.Length, timeStamp, emptySampleAttributes));
-                }
-            }
-            else
-            {
-                if (type == dawn_player.sample_type.audio)
-                {
-                    ReportGetSampleCompleted(new MediaStreamSample(audioStreamDescription, null, 0, 0, 0, emptySampleAttributes));
-                }
-                else
-                {
-                    ReportGetSampleCompleted(new MediaStreamSample(videoStreamDescription, null, 0, 0, 0, emptySampleAttributes));
-                }
-            }
-        }
-
         private void OnSeekCompleted(long seekToTime)
         {
             ReportSeekCompleted(seekToTime);
-        }
-
-        private void OnErrorOcurred(string errorDescription)
-        {
-            ErrorOccurred(errorDescription);
         }
     }
 }
