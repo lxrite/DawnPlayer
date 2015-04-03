@@ -35,13 +35,12 @@ public enum class sample_type {
     video
 };
 
-enum class open_result {
+public enum class open_result {
     ok,
     error,
     abort
 };
 
-public delegate void open_media_completed_handler(IMap<Platform::String^, Platform::String^>^ media_info);
 public delegate void get_sample_completed_handler(sample_type type, IMap<Platform::String^, Platform::Object^>^ sample_info);
 public delegate void seek_completed_handler(std::int64_t seek_to_time);
 public delegate void error_occured_handler(Platform::String^ error_description);
@@ -70,7 +69,7 @@ private:
     std::deque<video_sample> video_sample_queue;
     std::map<double, std::uint64_t, std::greater<double>> keyframes;
 
-    std::thread parse_thread;
+    std::thread sample_producer_thread;
 
     bool is_seeking;
     bool is_closing;
@@ -82,17 +81,16 @@ private:
 public:
     flv_player();
     void set_source(IRandomAccessStream^ random_access_stream);
-    void open_async();
+    IAsyncOperation<open_result>^ open_async(IMap<Platform::String^, Platform::String^>^ media_info);
     void get_sample_async(sample_type type);
     void seek_async(std::int64_t seek_to_time);
     void close();
 public:
-    event open_media_completed_handler^ open_media_completed_event;
     event get_sample_completed_handler^ get_sample_competed_event;
     event seek_completed_handler^ seek_completed_event;
     event error_occured_handler^ error_occured_event;
 private:
-    open_result do_open();
+    open_result do_open(IMap<Platform::String^, Platform::String^>^ media_info);
     void do_get_sample();
     void do_seek(std::int64_t seek_to_time);
 private:
@@ -106,8 +104,7 @@ private:
     void unregister_callback_functions();
     void report_error(const wchar_t* error_description);
 
-    void parse_thread_proc();
-
+    void parse_flv_file_body();
     std::string uint8_to_hex_string(const std::uint8_t* data, size_t size, bool uppercase = true) const;
 };
 

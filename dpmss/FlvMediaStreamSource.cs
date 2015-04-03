@@ -22,6 +22,7 @@ namespace DawnPlayer
         private MediaStreamDescription audioStreamDescription;
         private MediaStreamDescription videoStreamDescription;
         private static Dictionary<MediaSampleAttributeKeys, string> emptySampleAttributes = new Dictionary<MediaSampleAttributeKeys, string>();
+        private bool isClosed = false;
 
         private FlvMediaStreamSource(IRandomAccessStream ras)
         {
@@ -40,11 +41,11 @@ namespace DawnPlayer
         protected override void CloseMedia()
         {
             flvPlayer.close();
-            flvPlayer.open_media_completed_event -= OnOpenMediaCompleted;
             flvPlayer.get_sample_competed_event -= OnGetSampleCompleted;
             flvPlayer.seek_completed_event -= OnSeekCompleted;
             flvPlayer.error_occured_event -= OnErrorOcurred;
             flvPlayer = null;
+            isClosed = true;
         }
 
         protected override void GetDiagnosticAsync(MediaStreamSourceDiagnosticKind diagnosticKind)
@@ -62,15 +63,47 @@ namespace DawnPlayer
             flvPlayer.get_sample_async(sampleType);
         }
 
-        protected override void OpenMediaAsync()
+        protected override async void OpenMediaAsync()
         {
             flvPlayer = new dawn_player.flv_player();
             flvPlayer.set_source(randomAccessStream);
-            flvPlayer.open_media_completed_event += OnOpenMediaCompleted;
             flvPlayer.get_sample_competed_event += OnGetSampleCompleted;
             flvPlayer.seek_completed_event += OnSeekCompleted;
             flvPlayer.error_occured_event += OnErrorOcurred;
-            flvPlayer.open_async();
+            var mediaInfo = new Dictionary<string, string>();
+            var open_result = await flvPlayer.open_async(mediaInfo);
+            if (isClosed)
+            {
+                return;
+            }
+            if (open_result == open_result.ok)
+            {
+                var mediaStreamAttributes = new Dictionary<MediaSourceAttributesKeys, string>();
+                mediaStreamAttributes[MediaSourceAttributesKeys.Duration] = mediaInfo["Duration"];
+                mediaStreamAttributes[MediaSourceAttributesKeys.CanSeek] = mediaInfo["CanSeek"];
+
+                var audioStreamAttributes = new Dictionary<MediaStreamAttributeKeys, string>();
+                audioStreamAttributes[MediaStreamAttributeKeys.CodecPrivateData] = mediaInfo["AudioCodecPrivateData"];
+
+                var videoStreamAttributes = new Dictionary<MediaStreamAttributeKeys, string>();
+                videoStreamAttributes[MediaStreamAttributeKeys.Height] = mediaInfo["Height"];
+                videoStreamAttributes[MediaStreamAttributeKeys.Width] = mediaInfo["Width"];
+                videoStreamAttributes[MediaStreamAttributeKeys.VideoFourCC] = mediaInfo["VideoFourCC"];
+                videoStreamAttributes[MediaStreamAttributeKeys.CodecPrivateData] = mediaInfo["VideoCodecPrivateData"];
+
+                var availableMediaStreams = new List<MediaStreamDescription>();
+                audioStreamDescription = new MediaStreamDescription(MediaStreamType.Audio, audioStreamAttributes);
+                availableMediaStreams.Add(audioStreamDescription);
+                videoStreamDescription = new MediaStreamDescription(MediaStreamType.Video, videoStreamAttributes);
+                availableMediaStreams.Add(videoStreamDescription);
+
+                AudioBufferLength = 15;
+                ReportOpenMediaCompleted(mediaStreamAttributes, availableMediaStreams);
+            }
+            else if (open_result == open_result.error)
+            {
+                ErrorOccurred("Failed to open flv file.");
+            }
         }
 
         protected override void SeekAsync(long seekToTime)
@@ -81,31 +114,6 @@ namespace DawnPlayer
         protected override void SwitchMediaStreamAsync(MediaStreamDescription mediaStreamDescription)
         {
             throw new NotImplementedException();
-        }
-
-        private void OnOpenMediaCompleted(IDictionary<string, string> mediaInfo)
-        {
-            var mediaStreamAttributes = new Dictionary<MediaSourceAttributesKeys, string>();
-            mediaStreamAttributes[MediaSourceAttributesKeys.Duration] = mediaInfo["Duration"];
-            mediaStreamAttributes[MediaSourceAttributesKeys.CanSeek] = mediaInfo["CanSeek"];
-
-            var audioStreamAttributes = new Dictionary<MediaStreamAttributeKeys, string>();
-            audioStreamAttributes[MediaStreamAttributeKeys.CodecPrivateData] = mediaInfo["AudioCodecPrivateData"];
-
-            var videoStreamAttributes = new Dictionary<MediaStreamAttributeKeys, string>();
-            videoStreamAttributes[MediaStreamAttributeKeys.Height] = mediaInfo["Height"];
-            videoStreamAttributes[MediaStreamAttributeKeys.Width] = mediaInfo["Width"];
-            videoStreamAttributes[MediaStreamAttributeKeys.VideoFourCC] = mediaInfo["VideoFourCC"];
-            videoStreamAttributes[MediaStreamAttributeKeys.CodecPrivateData] = mediaInfo["VideoCodecPrivateData"];
-
-            var availableMediaStreams = new List<MediaStreamDescription>();
-            audioStreamDescription = new MediaStreamDescription(MediaStreamType.Audio, audioStreamAttributes);
-            availableMediaStreams.Add(audioStreamDescription);
-            videoStreamDescription = new MediaStreamDescription(MediaStreamType.Video, videoStreamAttributes);
-            availableMediaStreams.Add(videoStreamDescription);
-
-            AudioBufferLength = 15;
-            ReportOpenMediaCompleted(mediaStreamAttributes, availableMediaStreams);
         }
 
         private void OnGetSampleCompleted(dawn_player.sample_type type, IDictionary<string, Object> sampleInfo)
@@ -148,4 +156,3 @@ namespace DawnPlayer
         }
     }
 }
-
