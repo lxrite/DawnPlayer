@@ -102,7 +102,7 @@ void flv_player::close()
             this->async_read_operation->Cancel();
         }
     }
-    this->sample_consumer_cv.notify_one();
+    this->sample_consumer_cv.notify_all();
     this->sample_producer_cv.notify_one();
     this->seeker_cv.notify_one();
     if (this->sample_producer_thread.joinable()) {
@@ -652,7 +652,7 @@ void flv_player::parse_flv_file_body()
                 this->is_error_ocurred = true;
             }
             this->is_sample_producer_working = false;
-            this->sample_consumer_cv.notify_one();
+            this->sample_consumer_cv.notify_all();
             this->seeker_cv.notify_one();
             this->sample_producer_cv.wait(lck, [this]() -> bool {
                 if (this->is_closing) {
