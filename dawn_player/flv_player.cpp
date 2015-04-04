@@ -92,13 +92,11 @@ IAsyncOperation<std::int64_t>^ flv_player::begin_seek(std::int64_t seek_to_time)
     });
 }
 
-IAsyncAction^ flv_player::end_seek()
+void flv_player::end_seek()
 {
-    return concurrency::create_async([this]() {
-        std::unique_lock<std::mutex> lck(this->mtx);
-        this->is_seeking = false;
-        this->sample_producer_cv.notify_one();
-    });
+    std::lock_guard<std::mutex> lck(this->mtx);
+    this->is_seeking = false;
+    this->sample_producer_cv.notify_one();
 }
 
 void flv_player::close()

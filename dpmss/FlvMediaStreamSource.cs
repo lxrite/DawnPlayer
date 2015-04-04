@@ -151,7 +151,7 @@ namespace DawnPlayer
                 return;
             }
             ReportSeekCompleted(seekTo);
-            await flvPlayer.end_seek();
+            flvPlayer.end_seek();
             isSeeking = false;
         }
 
