@@ -69,6 +69,7 @@ private:
 
     std::atomic<std::uint32_t> pending_sample_cnt;
     std::atomic<bool> is_seek_pending;
+    std::atomic<std::int64_t> position;
 
     std::mutex mtx;
     std::condition_variable sample_consumer_cv;
@@ -94,6 +95,8 @@ public:
     IAsyncOperation<std::int64_t>^ begin_seek(std::int64_t seek_to_time);
     void end_seek();
     void close();
+
+    std::int64_t get_position();
 private:
     open_result do_open(IMap<Platform::String^, Platform::String^>^ media_info);
     get_sample_result do_get_sample(sample_type type, IMap<Platform::String^, Platform::Object^>^ sample_info);

@@ -27,18 +27,27 @@ namespace Demo
     {
         private bool isUserSeek = false;
         private IRandomAccessStream randomAccessStream;
+        private FlvMediaStreamSource mss;
         public MainPage()
         {
             InitializeComponent();
             var dispatcherTimer = new DispatcherTimer();
             dispatcherTimer.Tick += OnTimerEvent;
-            dispatcherTimer.Interval = new TimeSpan(0, 0, 1);
+            dispatcherTimer.Interval = TimeSpan.FromMilliseconds(500);
             dispatcherTimer.Start();
         }
 
         private void OnTimerEvent(object sender, EventArgs e)
         {
-            var position = mediaElement.Position;
+            TimeSpan position;
+            if (mss != null)
+            {
+                position = mss.Position;
+            }
+            else
+            {
+                position = TimeSpan.FromSeconds(0);
+            }
             var duration = mediaElement.NaturalDuration.TimeSpan;
             timeText.Text = String.Format("{0}:{1:D2}:{2:D2}/{3}:{4:D2}:{5:D2}",
                 position.Hours, position.Minutes, position.Seconds,
@@ -57,7 +66,8 @@ namespace Demo
                 var applicationFolder = Windows.ApplicationModel.Package.Current.InstalledLocation;
                 var storageFile = await applicationFolder.GetFileAsync("Assets\\test.flv");
                 randomAccessStream = await storageFile.OpenReadAsync();
-                mediaElement.SetSource(FlvMediaStreamSource.Wrap(randomAccessStream));
+                mss = FlvMediaStreamSource.Wrap(randomAccessStream);
+                mediaElement.SetSource(mss);
                 mediaElement.Play();
             }
             else if (curState == MediaElementState.Playing)
@@ -113,6 +123,7 @@ namespace Demo
             }
             if (curState == MediaElementState.Closed)
             {
+                mss = null;
                 if (randomAccessStream != null)
                 {
                     randomAccessStream.Dispose();

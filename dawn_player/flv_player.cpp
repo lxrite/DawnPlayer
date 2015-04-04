@@ -28,6 +28,7 @@ flv_player::flv_player() :
     is_audio_cfg_read(false),
     pending_sample_cnt(0),
     is_seek_pending(false),
+    position(0),
     is_seeking(false),
     is_closing(false),
     is_sample_producer_working(false),
@@ -84,6 +85,7 @@ IAsyncOperation<std::int64_t>^ flv_player::begin_seek(std::int64_t seek_to_time)
         seek_result result = this->do_seek(_seek_to_time);
         this->is_seek_pending.store(false, std::memory_order_release);
         if (result == seek_result::ok) {
+            this->position.store(_seek_to_time, std::memory_order_release);
             return _seek_to_time;
         }
         else {
@@ -129,6 +131,7 @@ void flv_player::close()
     this->flv_meta_data.reset();
     this->is_video_cfg_read = false;
     this->is_audio_cfg_read = false;
+    this->position.store(0, std::memory_order_release);
     this->audio_codec_private_data.clear();
     this->video_codec_private_data.clear();
     this->audio_sample_queue.clear();
@@ -139,6 +142,11 @@ void flv_player::close()
     this->is_sample_producer_working = false;
     this->is_all_sample_read = false;
     this->is_error_ocurred = false;
+}
+
+std::int64_t flv_player::get_position()
+{
+    return this->position.load(std::memory_order_acquire);
 }
 
 open_result flv_player::do_open(IMap<Platform::String^, Platform::String^>^ media_info)
@@ -458,6 +466,7 @@ get_sample_result flv_player::do_get_sample(sample_type type, IMap<Platform::Str
         }
         IBuffer^ sample_data_buffer = data_writer->DetachBuffer();
         sample_info->Insert(L"Data", sample_data_buffer);
+        this->position.store(v_sample.dts);
     }
     return get_sample_result::ok;
 }

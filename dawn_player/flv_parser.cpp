@@ -356,7 +356,7 @@ parse_result flv_parser::parse_flv_tags(const std::uint8_t* data, size_t size, s
                 //                         Composition time offset
                 //                       else
                 //                         0
-                // Just ignore it
+                auto composition_time = this->to_uint24_be(&data[offset]);
                 offset += 3;
                 // Data UI8[n] if AVCPacketType == 0
                 //               AVCDecoderConfigurationRecord
@@ -446,7 +446,8 @@ parse_result flv_parser::parse_flv_tags(const std::uint8_t* data, size_t size, s
                             return parse_result::error;
                         }
                         std::uint32_t nalu_length = 0;
-                        sample.timestamp = static_cast<std::int64_t>(static_cast<std::uint32_t>(timestamp | (timestamp_extended << 24))) * 10000;
+                        sample.dts = static_cast<std::int64_t>(static_cast<std::uint32_t>(timestamp | (timestamp_extended << 24))) * 10000;
+                        sample.timestamp = sample.dts + composition_time * 10000;
                         while (tag_data_size > offset - tag_data_offset) {
                             if (tag_data_size - (offset - tag_data_offset) < this->length_size_minus_one) {
                                 return parse_result::error;

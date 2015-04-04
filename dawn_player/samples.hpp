@@ -24,7 +24,16 @@ struct audio_sample {
     audio_sample& operator=(audio_sample&& other);
 };
 
-typedef audio_sample video_sample;
+struct video_sample {
+    std::int64_t dts;
+    std::int64_t timestamp;
+    std::vector<unsigned char> data;
+    video_sample();
+    video_sample(const video_sample& other);
+    video_sample(video_sample&& other);
+    video_sample& operator=(const video_sample& other);
+    video_sample& operator=(video_sample&& other);
+};
 
 } //end of sample
 } //end of dawn_player

@@ -26,6 +26,18 @@ namespace DawnPlayer
         private bool isErrorOcurred = false;
         private bool isSeeking = false;
 
+        public TimeSpan Position 
+        {
+            get
+            {
+                if (isClosed || isErrorOcurred)
+                {
+                    return TimeSpan.FromMilliseconds(0);
+                }
+                return TimeSpan.FromMilliseconds(flvPlayer.get_position() / 10000);
+            }
+        }
+
         private FlvMediaStreamSource(IRandomAccessStream ras)
         {
             this.randomAccessStream = ras;
