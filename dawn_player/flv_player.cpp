@@ -21,7 +21,7 @@ using namespace dawn_player::parser;
 namespace dawn_player {
 
 static const size_t BUFFER_QUEUE_DEFICIENT_SIZE = 100;
-static const size_t BUFFER_QUEUE_SUFFICIENT_SIZE = 2000;
+static const size_t BUFFER_QUEUE_SUFFICIENT_SIZE = 500;
 
 flv_player::flv_player() :
     is_video_cfg_read(false),
@@ -32,8 +32,7 @@ flv_player::flv_player() :
     is_closing(false),
     is_sample_producer_working(false),
     is_all_sample_read(false),
-    is_error_ocurred(false),
-    is_error_reported(false)
+    is_error_ocurred(false)
 {
 }
 
@@ -133,7 +132,6 @@ void flv_player::close()
     this->is_sample_producer_working = false;
     this->is_all_sample_read = false;
     this->is_error_ocurred = false;
-    this->is_error_reported = false;
 }
 
 open_result flv_player::do_open(IMap<Platform::String^, Platform::String^>^ media_info)

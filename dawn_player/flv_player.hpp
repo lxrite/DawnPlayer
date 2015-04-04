@@ -86,7 +86,6 @@ private:
     bool is_sample_producer_working;
     bool is_all_sample_read;
     bool is_error_ocurred;
-    bool is_error_reported;
 public:
     flv_player();
     void set_source(IRandomAccessStream^ random_access_stream);
