@@ -71,7 +71,7 @@ IAsyncOperation<get_sample_result>^ flv_player::get_sample_async(sample_type typ
     });
 }
 
-IAsyncOperation<std::int64_t>^ flv_player::seek_async(std::int64_t seek_to_time)
+IAsyncOperation<std::int64_t>^ flv_player::begin_seek(std::int64_t seek_to_time)
 {
     if (this->keyframes.empty()) {
         assert(false);
@@ -89,6 +89,15 @@ IAsyncOperation<std::int64_t>^ flv_player::seek_async(std::int64_t seek_to_time)
         else {
             return -1;
         }
+    });
+}
+
+IAsyncAction^ flv_player::end_seek()
+{
+    return concurrency::create_async([this]() {
+        std::unique_lock<std::mutex> lck(this->mtx);
+        this->is_seeking = false;
+        this->sample_producer_cv.notify_one();
     });
 }
 
@@ -488,9 +497,7 @@ seek_result flv_player::do_seek(std::int64_t& seek_to_time)
         this->is_error_ocurred = false;
         this->is_all_sample_read = false;
         this->video_file_stream->Seek(position);
-        this->is_seeking = false;
     }
-    this->sample_producer_cv.notify_one();
     seek_to_time = static_cast<std::int64_t>(time * 10000000);
     return seek_result::ok;
 }

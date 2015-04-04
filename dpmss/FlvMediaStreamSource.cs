@@ -145,13 +145,14 @@ namespace DawnPlayer
                 return;
             }
             isSeeking = true;
-            var seekTo = await flvPlayer.seek_async(seekToTime);
-            isSeeking = false;
+            var seekTo = await flvPlayer.begin_seek(seekToTime);
             if (isErrorOcurred || isClosed || seekTo == -1)
             {
                 return;
             }
             ReportSeekCompleted(seekTo);
+            await flvPlayer.end_seek();
+            isSeeking = false;
         }
 
         protected override void SwitchMediaStreamAsync(MediaStreamDescription mediaStreamDescription)

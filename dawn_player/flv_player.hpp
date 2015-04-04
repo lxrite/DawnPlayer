@@ -91,7 +91,8 @@ public:
     void set_source(IRandomAccessStream^ random_access_stream);
     IAsyncOperation<open_result>^ open_async(IMap<Platform::String^, Platform::String^>^ media_info);
     IAsyncOperation<get_sample_result>^ get_sample_async(sample_type type, IMap<Platform::String^, Platform::Object^>^ sample_info);
-    IAsyncOperation<std::int64_t>^ seek_async(std::int64_t seek_to_time);
+    IAsyncOperation<std::int64_t>^ begin_seek(std::int64_t seek_to_time);
+    IAsyncAction^ end_seek();
     void close();
 private:
     open_result do_open(IMap<Platform::String^, Platform::String^>^ media_info);
