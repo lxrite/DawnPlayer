@@ -1,0 +1,22 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClInclude Include="$(MSBuildThisFileDirectory)pch.h" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\flv_media_stream_source.hpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\amf_decode.hpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\amf_types.hpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\flv_player.hpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\flv_parser.hpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\samples.hpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="$(MSBuildThisFileDirectory)pch.cpp">
+      <PrecompiledHeader>Create</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\flv_media_stream_source.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\amf_types.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\flv_parser.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\flv_player.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\samples.cpp" />
+  </ItemGroup>
+</Project>
