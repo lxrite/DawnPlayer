@@ -123,21 +123,21 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="amf_decode.hpp" />
-    <ClInclude Include="amf_types.hpp" />
-    <ClInclude Include="flv_parser.hpp" />
-    <ClInclude Include="flv_player.hpp" />
+    <ClInclude Include="../../core/dawn_player/amf_decode.hpp" />
+    <ClInclude Include="../../core/dawn_player/amf_types.hpp" />
+    <ClInclude Include="../../core/dawn_player/flv_parser.hpp" />
+    <ClInclude Include="../../core/dawn_player/flv_player.hpp" />
     <ClInclude Include="pch.h" />
-    <ClInclude Include="samples.hpp" />
+    <ClInclude Include="../../core/dawn_player/samples.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="amf_types.cpp" />
-    <ClCompile Include="flv_parser.cpp" />
-    <ClCompile Include="flv_player.cpp" />
+    <ClCompile Include="../../core/dawn_player/amf_types.cpp" />
+    <ClCompile Include="../../core/dawn_player/flv_parser.cpp" />
+    <ClCompile Include="../../core/dawn_player/flv_player.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="samples.cpp" />
+    <ClCompile Include="../../core/dawn_player/samples.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Import Project="$(MSBuildExtensionsPath)\Microsoft\WindowsPhone\v$(TargetPlatformVersion)\Microsoft.Cpp.WindowsPhone.$(TargetPlatformVersion).targets" />
