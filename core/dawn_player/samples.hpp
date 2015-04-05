@@ -28,6 +28,7 @@ struct video_sample {
     std::int64_t dts;
     std::int64_t timestamp;
     std::vector<unsigned char> data;
+    bool is_key_frame;
     video_sample();
     video_sample(const video_sample& other);
     video_sample(video_sample&& other);

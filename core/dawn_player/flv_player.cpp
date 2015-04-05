@@ -460,6 +460,8 @@ get_sample_result flv_player::do_get_sample(sample_type type, IMap<Platform::Str
     }
     else {
         sample_info->Insert(L"Timestamp",ref new Platform::String(std::to_wstring(v_sample.timestamp).c_str()));
+        sample_info->Insert(L"DecodeTimestamp", ref new Platform::String(std::to_wstring(v_sample.dts).c_str()));
+        sample_info->Insert(L"KeyFrame", ref new Platform::String(v_sample.is_key_frame ? L"True" : L"False"));
         auto data_writer = ref new DataWriter();
         for(auto byte : v_sample.data) {
             data_writer->WriteByte(byte);

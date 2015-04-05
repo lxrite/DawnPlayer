@@ -321,6 +321,7 @@ parse_result flv_parser::parse_flv_tags(const std::uint8_t* data, size_t size, s
             //                          server use only)
             //                       5: video info/command frame 
             auto frame_type = data[offset] >> 4;
+            bool is_key_frame = frame_type == 1;
             // CodecID        UB[4]  1: JPEG (currently unused)
             //                       2: Sorenson H.263
             //                       3: Screen video
@@ -448,6 +449,7 @@ parse_result flv_parser::parse_flv_tags(const std::uint8_t* data, size_t size, s
                         std::uint32_t nalu_length = 0;
                         sample.dts = static_cast<std::int64_t>(static_cast<std::uint32_t>(timestamp | (timestamp_extended << 24))) * 10000;
                         sample.timestamp = sample.dts + composition_time * 10000;
+                        sample.is_key_frame = is_key_frame;
                         while (tag_data_size > offset - tag_data_offset) {
                             if (tag_data_size - (offset - tag_data_offset) < this->length_size_minus_one) {
                                 return parse_result::error;

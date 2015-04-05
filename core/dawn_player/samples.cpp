@@ -43,26 +43,29 @@ audio_sample& audio_sample::operator=(audio_sample&& other)
 }
 
 video_sample::video_sample()
-    : dts(0), timestamp(0)
+    : dts(0), timestamp(0), is_key_frame(false)
 {
 }
 
 video_sample::video_sample(const video_sample& other)
-    : dts(other.dts), timestamp(other.timestamp), data(other.data)
+    : dts(other.dts), timestamp(other.timestamp), data(other.data), is_key_frame(other.is_key_frame)
 {
 }
 
 video_sample::video_sample(video_sample&& other)
-    : dts(other.dts), timestamp(other.timestamp), data(std::move(other.data))
+    : dts(other.dts), timestamp(other.timestamp), data(std::move(other.data)), is_key_frame(other.is_key_frame)
 {
     other.dts = 0;
     other.timestamp = 0;
+    other.is_key_frame = false;
 }
 
 video_sample& video_sample::operator=(const video_sample& other)
 {
     this->dts = other.dts;
     this->timestamp = other.timestamp;
+    this->data = other.data;
+    this->is_key_frame = other.is_key_frame;
     return *this;
 }
 
@@ -71,8 +74,10 @@ video_sample& video_sample::operator=(video_sample&& other)
     this->dts = other.dts;
     this->timestamp = other.timestamp;
     this->data = std::move(other.data);
+    this->is_key_frame = other.is_key_frame;
     other.dts = 0;
     other.timestamp = 0;
+    other.is_key_frame = false;
     return *this;
 }
 
