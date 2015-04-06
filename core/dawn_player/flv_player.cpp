@@ -463,6 +463,24 @@ get_sample_result flv_player::do_get_sample(sample_type type, IMap<Platform::Str
         sample_info->Insert(L"DecodeTimestamp", ref new Platform::String(std::to_wstring(v_sample.dts).c_str()));
         sample_info->Insert(L"KeyFrame", ref new Platform::String(v_sample.is_key_frame ? L"True" : L"False"));
         auto data_writer = ref new DataWriter();
+        if (v_sample.is_key_frame) {
+            if (!this->sps.empty()) {
+                data_writer->WriteByte(0);
+                data_writer->WriteByte(0);
+                data_writer->WriteByte(1);
+                for (auto byte : this->sps) {
+                    data_writer->WriteByte(byte);
+                }
+            }
+            if (!this->pps.empty()) {
+                data_writer->WriteByte(0);
+                data_writer->WriteByte(0);
+                data_writer->WriteByte(1);
+                for (auto byte : this->pps) {
+                    data_writer->WriteByte(byte);
+                }
+            }
+        }
         for(auto byte : v_sample.data) {
             data_writer->WriteByte(byte);
         }
@@ -526,6 +544,8 @@ bool flv_player::on_script_tag(std::shared_ptr<dawn_player::amf::amf_base> name,
 
 bool flv_player::on_avc_decoder_configuration_record(const std::vector<std::uint8_t>& sps, const std::vector<std::uint8_t>& pps)
 {
+    this->sps = sps;
+    this->pps = pps;
     this->video_codec_private_data;
     std::uint8_t prefix[3] = { 0x00, 0x00, 0x01 };
     this->video_codec_private_data += this->uint8_to_hex_string(prefix, sizeof(prefix));

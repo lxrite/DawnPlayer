@@ -66,6 +66,8 @@ private:
     bool is_audio_cfg_read;
     std::string audio_codec_private_data;
     std::string video_codec_private_data;
+    std::vector<std::uint8_t> sps;
+    std::vector<std::uint8_t> pps;
 
     std::atomic<std::uint32_t> pending_sample_cnt;
     std::atomic<bool> is_seek_pending;
