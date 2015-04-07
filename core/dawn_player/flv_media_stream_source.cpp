@@ -103,12 +103,21 @@ void flv_media_stream_source::on_sample_requested(MediaStreamSource^ sender, Med
         auto sample_info = ref new Map<Platform::String^, Platform::Object^>();
         concurrency::create_task(this->player->get_sample_async(sample_type::audio, sample_info)).then([=](concurrency::task<get_sample_result> task) {
             auto result = task.get();
-            if (result != get_sample_result::ok) {
+            if (result == get_sample_result::ok) {
+                auto sample = MediaStreamSample::CreateFromBuffer(dynamic_cast<Buffer^>(sample_info->Lookup(L"Data")),
+                    TimeSpan{ std::stoll(sample_info->Lookup(L"Timestamp")->ToString()->Data()) });
+                request->Sample = sample;
+            }
+            else if (result == get_sample_result::eos) {
+                request->Sample = nullptr;
+            }
+            else if (result == get_sample_result::error) {
+                sender->NotifyError(MediaStreamSourceErrorStatus::Other);
                 return;
             }
-            auto sample = MediaStreamSample::CreateFromBuffer(dynamic_cast<Buffer^>(sample_info->Lookup(L"Data")),
-                TimeSpan{ std::stoll(sample_info->Lookup(L"Timestamp")->ToString()->Data()) });
-            request->Sample = sample;
+            else {
+                return;
+            }
             deferral->Complete();
         });
     }
@@ -116,14 +125,23 @@ void flv_media_stream_source::on_sample_requested(MediaStreamSource^ sender, Med
         auto sample_info = ref new Map<Platform::String^, Platform::Object^>();
         concurrency::create_task(this->player->get_sample_async(sample_type::video, sample_info)).then([=](concurrency::task<get_sample_result> task) {
             auto result = task.get();
-            if (result != get_sample_result::ok) {
+            if (result == get_sample_result::ok) {
+                auto sample = MediaStreamSample::CreateFromBuffer(dynamic_cast<Buffer^>(sample_info->Lookup(L"Data")),
+                    TimeSpan{ std::stoll(sample_info->Lookup(L"Timestamp")->ToString()->Data()) });
+                sample->DecodeTimestamp = TimeSpan{ std::stoll(sample_info->Lookup(L"DecodeTimestamp")->ToString()->Data()) };
+                sample->KeyFrame = sample_info->Lookup(L"KeyFrame")->ToString() == L"True";
+                request->Sample = sample;
+            }
+            else if (result == get_sample_result::eos) {
+                request->Sample = nullptr;
+            }
+            else if (result == get_sample_result::error) {
+                sender->NotifyError(MediaStreamSourceErrorStatus::Other);
                 return;
             }
-            auto sample = MediaStreamSample::CreateFromBuffer(dynamic_cast<Buffer^>(sample_info->Lookup(L"Data")),
-                TimeSpan{ std::stoll(sample_info->Lookup(L"Timestamp")->ToString()->Data()) });
-            sample->DecodeTimestamp = TimeSpan{ std::stoll(sample_info->Lookup(L"DecodeTimestamp")->ToString()->Data()) };
-            sample->KeyFrame = sample_info->Lookup(L"KeyFrame")->ToString() == L"True";
-            request->Sample = sample;
+            else {
+                return;
+            }
             deferral->Complete();
         });
     }
