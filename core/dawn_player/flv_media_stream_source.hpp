@@ -26,13 +26,12 @@ private:
 public:
     static IAsyncOperation<flv_media_stream_source^>^ create_async(IRandomAccessStream^ random_access_stream);
     MediaStreamSource^ unwrap();
+    virtual ~flv_media_stream_source();
 private:
     void on_starting(MediaStreamSource^ sender, MediaStreamSourceStartingEventArgs^ args);
     void on_sample_requested(MediaStreamSource^ sender, MediaStreamSourceSampleRequestedEventArgs^ args);
-    void on_closed(MediaStreamSource^ sender, MediaStreamSourceClosedEventArgs^ args);
     Windows::Foundation::EventRegistrationToken starting_event_token;
     Windows::Foundation::EventRegistrationToken sample_requested_event_token;
-    Windows::Foundation::EventRegistrationToken closed_event_token;
 };
 
 } // namespace dawn_player

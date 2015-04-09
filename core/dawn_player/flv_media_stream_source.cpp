@@ -29,7 +29,6 @@ void flv_media_stream_source::init(flv_player^ player, MediaStreamSource^ mss)
     this->mss = mss;
     starting_event_token = this->mss->Starting += ref new TypedEventHandler<MediaStreamSource^, MediaStreamSourceStartingEventArgs^>(this, &flv_media_stream_source::on_starting);
     sample_requested_event_token = this->mss->SampleRequested += ref new TypedEventHandler<MediaStreamSource^, MediaStreamSourceSampleRequestedEventArgs^>(this, &flv_media_stream_source::on_sample_requested);
-    closed_event_token = this->mss->Closed += ref new TypedEventHandler<MediaStreamSource^, MediaStreamSourceClosedEventArgs^>(this, &flv_media_stream_source::on_closed);
 }
 
 IAsyncOperation<flv_media_stream_source^>^ flv_media_stream_source::create_async(IRandomAccessStream^ random_access_stream)
@@ -72,6 +71,19 @@ IAsyncOperation<flv_media_stream_source^>^ flv_media_stream_source::create_async
 MediaStreamSource^ flv_media_stream_source::unwrap()
 {
     return this->mss;
+}
+
+flv_media_stream_source::~flv_media_stream_source()
+{
+    if (this->player) {
+        this->player->close();
+        this->player = nullptr;
+    }
+    if (this->mss) {
+        this->mss->Starting -= this->starting_event_token;
+        this->mss->SampleRequested -= this->sample_requested_event_token;
+        this->mss = nullptr;
+    }
 }
 
 void flv_media_stream_source::on_starting(MediaStreamSource^ sender, MediaStreamSourceStartingEventArgs^ args)
@@ -145,15 +157,6 @@ void flv_media_stream_source::on_sample_requested(MediaStreamSource^ sender, Med
             deferral->Complete();
         });
     }
-}
-
-void flv_media_stream_source::on_closed(MediaStreamSource^ sender, MediaStreamSourceClosedEventArgs^ args)
-{
-    this->player->close();
-    this->mss->Starting -= starting_event_token;
-    this->mss->SampleRequested -= sample_requested_event_token;
-    this->mss->Closed -= closed_event_token;
-    this->player = nullptr;
 }
 
 } // namespace dawn_player
