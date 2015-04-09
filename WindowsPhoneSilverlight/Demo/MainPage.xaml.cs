@@ -26,7 +26,6 @@ namespace Demo
     public partial class MainPage : PhoneApplicationPage
     {
         private bool isUserSeek = false;
-        private IRandomAccessStream randomAccessStream;
         private FlvMediaStreamSource mss;
         public MainPage()
         {
@@ -65,7 +64,7 @@ namespace Demo
             {
                 var applicationFolder = Windows.ApplicationModel.Package.Current.InstalledLocation;
                 var storageFile = await applicationFolder.GetFileAsync("Assets\\test.flv");
-                randomAccessStream = await storageFile.OpenReadAsync();
+                var randomAccessStream = await storageFile.OpenReadAsync();
                 mss = FlvMediaStreamSource.Wrap(randomAccessStream);
                 mediaElement.SetSource(mss);
                 mediaElement.Play();
@@ -123,11 +122,10 @@ namespace Demo
             }
             if (curState == MediaElementState.Closed)
             {
-                mss = null;
-                if (randomAccessStream != null)
+                if (mss != null)
                 {
-                    randomAccessStream.Dispose();
-                    randomAccessStream = null;
+                    mss.Dispose();
+                    mss = null;
                 }
             }
         }

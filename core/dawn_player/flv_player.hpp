@@ -85,12 +85,14 @@ private:
 
     bool is_seeking;
     bool is_closing;
+    bool is_closed;
 
     bool is_sample_producer_working;
     bool is_all_sample_read;
     bool is_error_ocurred;
 public:
     flv_player();
+    virtual ~flv_player();
     void set_source(IRandomAccessStream^ random_access_stream);
     IAsyncOperation<open_result>^ open_async(IMap<Platform::String^, Platform::String^>^ media_info);
     IAsyncOperation<get_sample_result>^ get_sample_async(sample_type type, IMap<Platform::String^, Platform::Object^>^ sample_info);

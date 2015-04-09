@@ -31,10 +31,16 @@ flv_player::flv_player() :
     position(0),
     is_seeking(false),
     is_closing(false),
+    is_closed(false),
     is_sample_producer_working(false),
     is_all_sample_read(false),
     is_error_ocurred(false)
 {
+}
+
+flv_player::~flv_player()
+{
+    this->close();
 }
 
 void flv_player::set_source(IRandomAccessStream^ random_access_stream)
@@ -103,6 +109,9 @@ void flv_player::end_seek()
 
 void flv_player::close()
 {
+    if (this->is_closed) {
+        return;
+    }
     {
         std::lock_guard<std::mutex> lck(this->mtx);
         this->is_closing = true;
@@ -142,6 +151,8 @@ void flv_player::close()
     this->is_sample_producer_working = false;
     this->is_all_sample_read = false;
     this->is_error_ocurred = false;
+
+    this->is_closed = true;
 }
 
 std::int64_t flv_player::get_position()

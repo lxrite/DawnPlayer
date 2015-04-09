@@ -15,16 +15,17 @@ using dawn_player;
 
 namespace DawnPlayer
 {
-    public class FlvMediaStreamSource : MediaStreamSource
+    public class FlvMediaStreamSource : MediaStreamSource, IDisposable
     {
         private flv_player flvPlayer;
-        private Windows.Storage.Streams.IRandomAccessStream randomAccessStream;
+        private IRandomAccessStream randomAccessStream;
         private MediaStreamDescription audioStreamDescription;
         private MediaStreamDescription videoStreamDescription;
         private static Dictionary<MediaSampleAttributeKeys, string> emptySampleAttributes = new Dictionary<MediaSampleAttributeKeys, string>();
         private bool isClosed = false;
         private bool isErrorOcurred = false;
         private bool isSeeking = false;
+        private bool disposed = false;
 
         public TimeSpan Position 
         {
@@ -40,7 +41,7 @@ namespace DawnPlayer
 
         private FlvMediaStreamSource(IRandomAccessStream ras)
         {
-            this.randomAccessStream = ras;
+            randomAccessStream = ras;
         }
 
         public static FlvMediaStreamSource Wrap(IRandomAccessStream ras)
@@ -55,7 +56,6 @@ namespace DawnPlayer
         protected override void CloseMedia()
         {
             flvPlayer.close();
-            flvPlayer = null;
             isClosed = true;
         }
 
@@ -70,7 +70,7 @@ namespace DawnPlayer
             {
                 return;
             }
-            dawn_player.sample_type sampleType = mediaStreamType == MediaStreamType.Audio ? dawn_player.sample_type.audio : dawn_player.sample_type.video;
+            sample_type sampleType = mediaStreamType == MediaStreamType.Audio ? sample_type.audio : sample_type.video;
             Dictionary<string, object> sampleInfo = new Dictionary<string, object>();
             var result = await flvPlayer.get_sample_async(sampleType, sampleInfo);
             if (isClosed || isErrorOcurred)
@@ -111,7 +111,7 @@ namespace DawnPlayer
 
         protected override async void OpenMediaAsync()
         {
-            flvPlayer = new dawn_player.flv_player();
+            flvPlayer = new flv_player();
             flvPlayer.set_source(randomAccessStream);
             var mediaInfo = new Dictionary<string, string>();
             var open_result = await flvPlayer.open_async(mediaInfo);
@@ -170,6 +170,32 @@ namespace DawnPlayer
         protected override void SwitchMediaStreamAsync(MediaStreamDescription mediaStreamDescription)
         {
             throw new NotImplementedException();
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (disposed)
+            {
+                return;
+            }
+            if (disposing)
+            {
+                flvPlayer.Dispose();
+                randomAccessStream.Dispose();
+            }
+            flvPlayer = null;
+            randomAccessStream = null;
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        ~FlvMediaStreamSource()
+        {
+            Dispose(false);
         }
     }
 }
