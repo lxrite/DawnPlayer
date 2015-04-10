@@ -55,8 +55,11 @@ IAsyncOperation<flv_media_stream_source^>^ flv_media_stream_source::create_async
         auto aep = AudioEncodingProperties::CreateAac(sample_rate, channel_count, bit_rate);
         auto asd = ref new AudioStreamDescriptor(aep);
         auto vep = VideoEncodingProperties::CreateH264();
-        vep->Height = std::stoul(media_info->Lookup("Height")->ToString()->Data());
-        vep->Width = std::stoul(media_info->Lookup("Width")->ToString()->Data());
+        auto video_width = std::stoul(media_info->Lookup("Width")->ToString()->Data());
+        auto video_height = std::stoul(media_info->Lookup("Width")->ToString()->Data());
+        // It seems that H.264 only supports even numbered dimensions.
+        vep->Width = video_width - (video_width % 2);
+        vep->Height = video_height - (video_height % 2);
         auto vsd = ref new VideoStreamDescriptor(vep);
         auto mss = ref new MediaStreamSource(asd);
         mss->AddStreamDescriptor(vsd);
