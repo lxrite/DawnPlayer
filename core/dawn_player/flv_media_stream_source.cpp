@@ -33,6 +33,11 @@ void flv_media_stream_source::init(flv_player^ player, MediaStreamSource^ mss)
 
 IAsyncOperation<flv_media_stream_source^>^ flv_media_stream_source::create_async(IRandomAccessStream^ random_access_stream)
 {
+    return create_async(random_access_stream, true);
+}
+
+IAsyncOperation<flv_media_stream_source^>^ flv_media_stream_source::create_async(IRandomAccessStream^ random_access_stream, bool stream_can_seek)
+{
     auto player = ref new flv_player();
     player->set_source(random_access_stream);
     auto media_info = ref new Map<Platform::String^, Platform::String^>();
@@ -63,9 +68,9 @@ IAsyncOperation<flv_media_stream_source^>^ flv_media_stream_source::create_async
         auto vsd = ref new VideoStreamDescriptor(vep);
         auto mss = ref new MediaStreamSource(asd);
         mss->AddStreamDescriptor(vsd);
-        mss->CanSeek = media_info->Lookup(L"CanSeek")->ToString() == L"True";
+        mss->CanSeek = stream_can_seek && (media_info->Lookup(L"CanSeek")->ToString() == L"True");
         // Set BufferTime to 0 to improve seek experience in Debug mode
-        mss->BufferTime = TimeSpan { 0 };
+        mss->BufferTime = TimeSpan{ 0 };
         mss->Duration = TimeSpan{ std::stoll(media_info->Lookup(L"Duration")->ToString()->Data()) };
         auto flv_mss = ref new flv_media_stream_source();
         flv_mss->init(player, mss);

@@ -25,6 +25,7 @@ private:
     void init(flv_player^ player, MediaStreamSource^ mss);
 public:
     static IAsyncOperation<flv_media_stream_source^>^ create_async(IRandomAccessStream^ random_access_stream);
+    static IAsyncOperation<flv_media_stream_source^>^ create_async(IRandomAccessStream^ random_access_stream, bool stream_can_seek);
     MediaStreamSource^ unwrap();
     virtual ~flv_media_stream_source();
 private:

@@ -19,6 +19,7 @@ namespace DawnPlayer
     {
         private flv_player flvPlayer;
         private IRandomAccessStream randomAccessStream;
+        private bool isStreamCanSeek;
         private MediaStreamDescription audioStreamDescription;
         private MediaStreamDescription videoStreamDescription;
         private static Dictionary<MediaSampleAttributeKeys, string> emptySampleAttributes = new Dictionary<MediaSampleAttributeKeys, string>();
@@ -39,18 +40,24 @@ namespace DawnPlayer
             }
         }
 
-        private FlvMediaStreamSource(IRandomAccessStream ras)
+        private FlvMediaStreamSource(IRandomAccessStream ras, bool stramCanSeek)
         {
             randomAccessStream = ras;
+            isStreamCanSeek = stramCanSeek;
         }
 
         public static FlvMediaStreamSource Wrap(IRandomAccessStream ras)
+        {
+            return Wrap(ras, true);
+        }
+
+        public static FlvMediaStreamSource Wrap(IRandomAccessStream ras, bool streamCanSeek)
         {
             if (ras == null)
             {
                 throw new ArgumentNullException("ArgumentNullException.");
             }
-            return new FlvMediaStreamSource(ras);
+            return new FlvMediaStreamSource(ras, streamCanSeek);
         }
 
         protected override void CloseMedia()
@@ -123,7 +130,14 @@ namespace DawnPlayer
             {
                 var mediaStreamAttributes = new Dictionary<MediaSourceAttributesKeys, string>();
                 mediaStreamAttributes[MediaSourceAttributesKeys.Duration] = mediaInfo["Duration"];
-                mediaStreamAttributes[MediaSourceAttributesKeys.CanSeek] = mediaInfo["CanSeek"];
+                if (!isStreamCanSeek)
+                {
+                    mediaStreamAttributes[MediaSourceAttributesKeys.CanSeek] = false.ToString();
+                }
+                else
+                {
+                    mediaStreamAttributes[MediaSourceAttributesKeys.CanSeek] = mediaInfo["CanSeek"];
+                }
 
                 var audioStreamAttributes = new Dictionary<MediaStreamAttributeKeys, string>();
                 audioStreamAttributes[MediaStreamAttributeKeys.CodecPrivateData] = mediaInfo["AudioCodecPrivateData"];
