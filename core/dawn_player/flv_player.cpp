@@ -176,6 +176,9 @@ open_result flv_player::do_open(IMap<Platform::String^, Platform::String^>^ medi
     }
     catch (const concurrency::task_canceled&) {
     }
+    catch (Platform::Exception^) {
+        return open_result::error;
+    }
     {
         std::lock_guard<std::mutex> lck(this->mtx);
         this->async_read_operation = nullptr;
@@ -211,6 +214,9 @@ open_result flv_player::do_open(IMap<Platform::String^, Platform::String^>^ medi
         }
         catch (const concurrency::task_canceled&) {
             return open_result::abort;
+        }
+        catch (Platform::Exception^) {
+            return open_result::error;
         }
         {
             std::lock_guard<std::mutex> lck(this->mtx);
@@ -639,6 +645,7 @@ void flv_player::parse_flv_file_body()
     IBuffer^ buffer = ref new Buffer(65536);
     for (;;) {
         concurrency::task<IBuffer^> async_read_task;
+        bool io_error = false;
         {
             std::lock_guard<std::mutex> lck(this->mtx);
             if (this->is_closing) {
@@ -651,6 +658,9 @@ void flv_player::parse_flv_file_body()
             buffer = async_read_task.get();
         }
         catch (const concurrency::task_canceled&) {
+        }
+        catch (Platform::Exception^) {
+            io_error = true;
         }
         {
             std::unique_lock<std::mutex> lck(this->mtx);
@@ -675,7 +685,7 @@ void flv_player::parse_flv_file_body()
             }
         }
         parse_result parse_res = parse_result::ok;
-        if (buffer->Length != 0) {
+        if (!io_error && buffer->Length != 0) {
             this->read_buffer.reserve(this->read_buffer.size() + buffer->Length);
             auto data_reader = Windows::Storage::Streams::DataReader::FromBuffer(buffer);
             for (std::uint32_t i = 0; i != buffer->Length; ++i) {
@@ -693,7 +703,7 @@ void flv_player::parse_flv_file_body()
             if (buffer->Length == 0) {
                 this->is_all_sample_read = true;
             }
-            else if (parse_res != parse_result::ok) {
+            else if (parse_res != parse_result::ok || io_error) {
                 this->is_error_ocurred = true;
             }
             this->is_sample_producer_working = false;
