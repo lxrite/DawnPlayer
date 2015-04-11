@@ -1,8 +1,16 @@
-﻿using System;
+﻿/*
+ *    MainPage.xaml.cs:
+ *
+ *    Copyright (C) 2015 limhiaoing <blog.poxiao.me> All Rights Reserved.
+ *
+ */
+
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
+using System.Diagnostics;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
 using Windows.UI.Xaml;
@@ -13,13 +21,10 @@ using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
 
-// “空白页”项模板在 http://go.microsoft.com/fwlink/?LinkId=234238 上提供
+using dawn_player;
 
 namespace Demo
 {
-    /// <summary>
-    /// 可独立使用或用于导航至 Frame 内部的空白页。
-    /// </summary>
     public sealed partial class MainPage : Page
     {
         public MainPage()
@@ -29,35 +34,69 @@ namespace Demo
             this.NavigationCacheMode = NavigationCacheMode.Required;
         }
 
-        /// <summary>
-        /// 在此页将要在 Frame 中显示时进行调用。
-        /// </summary>
-        /// <param name="e">描述如何访问此页的事件数据。
-        /// 此参数通常用于配置页。</param>
         protected override void OnNavigatedTo(NavigationEventArgs e)
         {
-            // TODO: 准备此处显示的页面。
-
-            // TODO: 如果您的应用程序包含多个页面，请确保
-            // 通过注册以下事件来处理硬件“后退”按钮:
-            // Windows.Phone.UI.Input.HardwareButtons.BackPressed 事件。
-            // 如果使用由某些模板提供的 NavigationHelper，
-            // 则系统会为您处理该事件。
         }
 
-        private async void loadAndPlay_Click(object sender, RoutedEventArgs e)
+        private bool isOpening = false;
+        private flv_media_stream_source fmss;
+
+        private async void OnLoadButtonClick(object sender, RoutedEventArgs e)
         {
-            var applicationFolder = Windows.ApplicationModel.Package.Current.InstalledLocation; ;
-            var folders = await applicationFolder.GetFoldersAsync();
-            var storageFile = await applicationFolder.GetFileAsync("Assets\\test.flv");
-            var randomAccessStream = await storageFile.OpenReadAsync();
-            var fmss = await dawn_player.flv_media_stream_source.create_async(randomAccessStream);
-            if (fmss == null)
+            if (fmss == null && !isOpening)
             {
-                return;
+                isOpening = true;
+                var applicationFolder = Windows.ApplicationModel.Package.Current.InstalledLocation; ;
+                var folders = await applicationFolder.GetFoldersAsync();
+                var storageFile = await applicationFolder.GetFileAsync("Assets\\test.flv");
+                var randomAccessStream = await storageFile.OpenReadAsync();
+                fmss = await flv_media_stream_source.create_async(randomAccessStream);
+                isOpening = false;
+                if (fmss == null)
+                {
+                    randomAccessStream.Dispose();
+                    Debug.WriteLine("Failed to open FLV file.");
+                    return;
+                }
+                mediaElement.SetMediaStreamSource(fmss.unwrap());
+                mediaElement.Play();
             }
-            mediaElement.SetMediaStreamSource(fmss.unwrap());
-            mediaElement.Play();
+        }
+
+        private void OnCloseButtonClick(object sender, RoutedEventArgs e)
+        {
+            mediaElement.Source = null;
+        }
+
+        private void OnMediaOpened(object sender, RoutedEventArgs e)
+        {
+            Debug.WriteLine("OnMediaOpened");
+        }
+
+        private void OnMediaEnded(object sender, RoutedEventArgs e)
+        {
+            Debug.WriteLine("OnMediaEnded");
+            mediaElement.Source = null;
+        }
+
+        private void OnMediaFailed(object sender, RoutedEventArgs e)
+        {
+            Debug.WriteLine("OnMediaFailed");
+            mediaElement.Source = null;
+        }
+
+        private void OnCurrentStateChanged(object sender, RoutedEventArgs e)
+        {
+            var curState = (sender as MediaElement).CurrentState;
+            Debug.WriteLine("OnCurrentStateChanged: " + curState.ToString());
+            if (curState == MediaElementState.Closed)
+            {
+                if (fmss != null)
+                {
+                    fmss.Dispose();
+                    fmss = null;
+                }
+            }
         }
     }
 }

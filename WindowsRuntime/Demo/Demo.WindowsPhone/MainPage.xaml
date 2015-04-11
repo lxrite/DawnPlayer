@@ -13,12 +13,19 @@
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        <MediaElement x:Name="mediaElement" Grid.Row="0" AreTransportControlsEnabled="True"/>
+        <MediaElement x:Name="mediaElement" Grid.Row="0"
+                      AreTransportControlsEnabled="True"
+                      MediaEnded="OnMediaEnded"
+                      MediaOpened="OnMediaOpened"
+                      MediaFailed="OnMediaFailed"
+                      CurrentStateChanged="OnCurrentStateChanged"/>
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <Button x:Name="loadAndPlay" Grid.Column="0" Click="loadAndPlay_Click">Load</Button>
+            <Button Grid.Column="0" Click="OnLoadButtonClick">Load</Button>
+            <Button Grid.Column="1" Click="OnCloseButtonClick">Close</Button>
         </Grid>
     </Grid>
 </Page>
