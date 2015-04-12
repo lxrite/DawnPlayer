@@ -8,6 +8,7 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\flv_player.hpp" />
     <ClInclude Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\flv_parser.hpp" />
     <ClInclude Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\samples.hpp" />
+    <ClInclude Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\http_random_access_stream.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="$(MSBuildThisFileDirectory)pch.cpp">
@@ -18,5 +19,6 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\flv_parser.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\flv_player.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\samples.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\http_random_access_stream.cpp" />
   </ItemGroup>
 </Project>
