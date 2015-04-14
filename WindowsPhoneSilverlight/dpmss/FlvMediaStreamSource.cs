@@ -170,15 +170,23 @@ namespace DawnPlayer
             {
                 return;
             }
-            isSeeking = true;
-            var seekTo = await flvPlayer.begin_seek(seekToTime);
-            if (isErrorOcurred || isClosed || seekTo == -1)
+            if (Math.Abs(seekToTime - flvPlayer.get_position()) < 10000000)
             {
-                return;
+                // No seek if interval less than 1 second
+                ReportSeekCompleted(flvPlayer.get_position());
             }
-            ReportSeekCompleted(seekTo);
-            flvPlayer.end_seek();
-            isSeeking = false;
+            else
+            {
+                isSeeking = true;
+                var seekTo = await flvPlayer.begin_seek(seekToTime);
+                if (isErrorOcurred || isClosed || seekTo == -1)
+                {
+                    return;
+                }
+                ReportSeekCompleted(seekTo);
+                flvPlayer.end_seek();
+                isSeeking = false;
+            }
         }
 
         protected override void SwitchMediaStreamAsync(MediaStreamDescription mediaStreamDescription)

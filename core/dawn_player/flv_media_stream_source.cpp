@@ -103,6 +103,10 @@ void flv_media_stream_source::on_starting(MediaStreamSource^ sender, MediaStream
     if (start_position == nullptr) {
         request->SetActualStartPosition(TimeSpan{ this->player->get_position() });
     }
+    else if (std::abs(start_position->Value.Duration - this->player->get_position()) < 10000000) {
+        // No seek if interval less than 1 second
+        request->SetActualStartPosition(TimeSpan{ this->player->get_position() });
+    }
     else {
         auto deferral = request->GetDeferral();
         concurrency::create_task(this->player->begin_seek(start_position->Value.Duration)).then([=](concurrency::task<std::int64_t> task) {
