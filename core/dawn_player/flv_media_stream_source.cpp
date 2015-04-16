@@ -46,7 +46,12 @@ IAsyncOperation<flv_media_stream_source^>^ flv_media_stream_source::create_async
         auto result = shared_task->get();
         if (result != open_result::ok) {
             player->close();
-            return nullptr;
+        }
+        if (result == open_result::abort) {
+            throw ref new Platform::OperationCanceledException("Operation canceled.");
+        }
+        else if (result != open_result::ok) {
+            throw ref new Platform::FailureException("Failed to open FLV file.");
         }
         auto acpd_w = media_info->Lookup(L"AudioCodecPrivateData")->ToString();
         std::string acpd;
