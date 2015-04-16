@@ -46,12 +46,6 @@ namespace Demo
                 var randomAccessStream = await storageFile.OpenReadAsync();
                 fmss = await flv_media_stream_source.create_async(randomAccessStream);
                 isOpening = false;
-                if (fmss == null)
-                {
-                    randomAccessStream.Dispose();
-                    Debug.WriteLine("Failed to open FLV file.");
-                    return;
-                }
                 mediaElement.SetMediaStreamSource(fmss.unwrap());
                 mediaElement.Play();
             }
