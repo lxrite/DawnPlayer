@@ -112,7 +112,7 @@ private:
     bool on_audio_sample(audio_sample&& sample);
     bool on_video_sample(video_sample&& sample);
 
-    void register_callback_functions();
+    void register_callback_functions(bool sample_only);
     void unregister_callback_functions();
 
     void parse_flv_file_body();

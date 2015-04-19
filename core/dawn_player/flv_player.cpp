@@ -54,7 +54,7 @@ IAsyncOperation<open_result>^ flv_player::open_async(IMap<Platform::String^, Pla
     auto future = std::shared_future<open_result>(promise->get_future());
     this->is_sample_producer_working = true;
     this->sample_producer_thread = std::thread([this, media_info, promise]() {
-        this->register_callback_functions();
+        this->register_callback_functions(false);
         auto open_res = this->do_open(media_info);
         this->unregister_callback_functions();
         promise->set_value(open_res);
@@ -611,17 +611,24 @@ bool flv_player::on_video_sample(video_sample&& sample)
     return true;
 }
 
-void flv_player::register_callback_functions()
+void flv_player::register_callback_functions(bool sample_only)
 {
-    this->flv_parser.on_script_tag = [this](std::shared_ptr<dawn_player::amf::amf_base> name, std::shared_ptr<dawn_player::amf::amf_base> value) -> bool {
-        return this->on_script_tag(name, value);
-    };
-    this->flv_parser.on_avc_decoder_configuration_record = [this](const std::vector<std::uint8_t>& sps, const std::vector<std::uint8_t>& pps) -> bool {
-        return this->on_avc_decoder_configuration_record(sps, pps);
-    };
-    this->flv_parser.on_audio_specific_config = [this](const dawn_player::parser::audio_special_config& asc) -> bool {
-        return this->on_audio_specific_config(asc);
-    };
+    if (sample_only) {
+        this->flv_parser.on_script_tag = nullptr;
+        this->flv_parser.on_avc_decoder_configuration_record = nullptr;
+        this->flv_parser.on_audio_specific_config = nullptr;
+    }
+    else {
+        this->flv_parser.on_script_tag = [this](std::shared_ptr<dawn_player::amf::amf_base> name, std::shared_ptr<dawn_player::amf::amf_base> value) -> bool {
+            return this->on_script_tag(name, value);
+        };
+        this->flv_parser.on_avc_decoder_configuration_record = [this](const std::vector<std::uint8_t>& sps, const std::vector<std::uint8_t>& pps) -> bool {
+            return this->on_avc_decoder_configuration_record(sps, pps);
+        };
+        this->flv_parser.on_audio_specific_config = [this](const dawn_player::parser::audio_special_config& asc) -> bool {
+            return this->on_audio_specific_config(asc);
+        };
+    }
     this->flv_parser.on_audio_sample = [this](audio_sample&& sample) -> bool {
         return this->on_audio_sample(std::move(sample));
     };
@@ -641,7 +648,7 @@ void flv_player::unregister_callback_functions()
 
 void flv_player::parse_flv_file_body()
 {
-    this->register_callback_functions();
+    this->register_callback_functions(true);
     IBuffer^ buffer = ref new Buffer(65536);
     for (;;) {
         concurrency::task<IBuffer^> async_read_task;
