@@ -42,15 +42,23 @@ IAsyncOperation<flv_media_stream_source^>^ flv_media_stream_source::create_async
     player->set_source(random_access_stream);
     auto media_info = ref new Map<Platform::String^, Platform::String^>();
     auto shared_task = std::make_shared<concurrency::task<open_result>>(concurrency::create_task(player->open_async(media_info)));
-    return concurrency::create_async([=]() -> flv_media_stream_source^ {
+    return concurrency::create_async([=](concurrency::cancellation_token ct) -> flv_media_stream_source^ {
+        std::atomic<bool> cancel_flag(false);
+        auto callback_token = ct.register_callback([player, &cancel_flag]() {
+            bool exp = false;
+            if (cancel_flag.compare_exchange_strong(exp, true)) {
+                player->close();
+            }
+        });
         auto result = shared_task->get();
-        if (result != open_result::ok) {
-            player->close();
-        }
-        if (result == open_result::abort) {
+        ct.deregister_callback(callback_token);
+        bool exp = false;
+        bool is_canceled = !cancel_flag.compare_exchange_strong(exp, true);
+        if (is_canceled) {
             throw ref new Platform::OperationCanceledException("Operation canceled.");
         }
-        else if (result != open_result::ok) {
+        if (result != open_result::ok) {
+            player->close();
             throw ref new Platform::FailureException("Failed to open FLV file.");
         }
         auto acpd_w = media_info->Lookup(L"AudioCodecPrivateData")->ToString();
