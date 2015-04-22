@@ -328,6 +328,8 @@ std::pair<amf_date, RandomAccessIterator> decode_amf_date_and_return_iterator(Ra
     cvt.from[2] = *iter++;
     cvt.from[1] = *iter++;
     cvt.from[0] = *iter++;
+    // Ignore time-zone (reserved S16)
+    iter += 2;
     return std::make_pair(amf_date(cvt.to), iter);
 }
 
