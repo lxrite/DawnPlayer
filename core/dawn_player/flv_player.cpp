@@ -549,6 +549,9 @@ seek_result flv_player::do_seek(std::int64_t& seek_to_time)
 bool flv_player::on_script_tag(std::shared_ptr<dawn_player::amf::amf_base> name, std::shared_ptr<dawn_player::amf::amf_base> value)
 {
     using namespace dawn_player::amf;
+    if (this->flv_meta_data) {
+        return true;
+    }
     if (name->get_type() != amf_type::string || std::dynamic_pointer_cast<amf_string, amf_base>(name)->get_value() != "onMetaData") {
         return true;
     }
