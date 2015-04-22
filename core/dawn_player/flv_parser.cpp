@@ -9,6 +9,7 @@
 
 #include <cassert>
 #include <tuple>
+#include <utility>
 
 #include "amf_decode.hpp"
 #include "flv_parser.hpp"
@@ -128,7 +129,12 @@ parse_result flv_parser::parse_flv_tags(const std::uint8_t* data, size_t size, s
         }
         auto previous_tag_size = this->to_uint32_be(&data[offset + tag_data_size]);
         if (previous_tag_size != tag_data_size + 11) {
-            return parse_result::error;
+            // Some FLV metadata tools store previous_tag_size in neither big-endian nor little-endian.
+            std::swap(*reinterpret_cast<char*>(&previous_tag_size), *(reinterpret_cast<char*>(&previous_tag_size) + 2));
+            std::swap(*(reinterpret_cast<char*>(&previous_tag_size) + 1), *(reinterpret_cast<char*>(&previous_tag_size) + 3));
+            if (tag_type != 18 || previous_tag_size != tag_data_size + 11) {
+                return parse_result::error;
+            }
         }
         auto tag_data_offset = offset;
         if (tag_type == 18) {
