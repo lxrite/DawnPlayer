@@ -16,7 +16,7 @@ A FLV playback library for Windows Phone Silverlight & Windows Runtime.
 
 ### Usage
 
-Asume we have a `MediaElement` control named `mediaElement`, and there are a FLV file at `Assets\test.flv`.
+Asuming we have a `MediaElement` control named `mediaElement`, and there is a FLV file at `Assets\test.flv`.
 
 #### Windows Phone Silverlight
 ``` csharp
@@ -29,7 +29,7 @@ mediaElement.Play();
 
 #### Windows Runtime
 ``` csharp
-var applicationFolder = Windows.ApplicationModel.Package.Current.InstalledLocation; ;
+var applicationFolder = Windows.ApplicationModel.Package.Current.InstalledLocation;
 var folders = await applicationFolder.GetFoldersAsync();
 var storageFile = await applicationFolder.GetFileAsync("Assets\\test.flv");
 var randomAccessStream = await storageFile.OpenReadAsync();
