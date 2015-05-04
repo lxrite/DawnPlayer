@@ -5,7 +5,7 @@ A FLV playback library for Windows Phone Silverlight & Windows Runtime.
 * No third-party dependencies
 * Support both Windows Phone Silverlight & Windows Runtime
 
-### Requirement
+### Requirements
 #### Windows Phone Silverlight
 * Microsoft Visual Studio 2012
 * Windows Phone 8.0 SDK
@@ -30,7 +30,6 @@ mediaElement.Play();
 #### Windows Runtime
 ``` csharp
 var applicationFolder = Windows.ApplicationModel.Package.Current.InstalledLocation;
-var folders = await applicationFolder.GetFoldersAsync();
 var storageFile = await applicationFolder.GetFileAsync("Assets\\test.flv");
 var randomAccessStream = await storageFile.OpenReadAsync();
 fmss = await flv_media_stream_source.create_async(randomAccessStream);
