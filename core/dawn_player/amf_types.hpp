@@ -68,6 +68,8 @@ public:
     bool empty() const;
 };
 
+class amf_ecma_array;
+
 class amf_object : public amf_base {
 public:
     typedef amf_string property_type;
@@ -83,6 +85,7 @@ public:
     void push_back(const value_type& value);
     void push_back(value_type&& value);
     mapped_value_type get_attribute_value(const std::string& attribute_name) const;
+    std::shared_ptr<amf_ecma_array> to_ecma_array() const;
 };
 
 class amf_ecma_array : public amf_base {

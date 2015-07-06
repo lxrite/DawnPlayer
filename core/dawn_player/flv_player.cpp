@@ -555,10 +555,15 @@ bool flv_player::on_script_tag(std::shared_ptr<dawn_player::amf::amf_base> name,
     if (name->get_type() != amf_type::string || std::dynamic_pointer_cast<amf_string, amf_base>(name)->get_value() != "onMetaData") {
         return true;
     }
-    if (value->get_type() != amf_type::ecma_array) {
+    if (value->get_type() == amf_type::ecma_array) {
+        this->flv_meta_data = std::dynamic_pointer_cast<amf_ecma_array, amf_base>(value);
+    }
+    else if (value->get_type() == amf_type::object) {
+        this->flv_meta_data = std::dynamic_pointer_cast<amf_object, amf_base>(value)->to_ecma_array();
+    }
+    else {
         return false;
     }
-    this->flv_meta_data = std::dynamic_pointer_cast<amf_ecma_array, amf_base>(value);
     return true;
 }
 

@@ -140,6 +140,15 @@ amf_object::mapped_value_type amf_object::get_attribute_value(const std::string&
     }
 }
 
+std::shared_ptr<amf_ecma_array> amf_object::to_ecma_array() const
+{
+    auto ecma_array = std::make_shared<amf_ecma_array>();
+    for (auto iter = this->_inner_vector.begin(); iter != this->_inner_vector.end(); ++iter) {
+        ecma_array->push_back(*iter);
+    }
+    return ecma_array;
+}
+
 amf_ecma_array::amf_ecma_array()
 {
 }
