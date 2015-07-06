@@ -129,7 +129,10 @@ namespace DawnPlayer
             if (open_result == open_result.ok)
             {
                 var mediaStreamAttributes = new Dictionary<MediaSourceAttributesKeys, string>();
-                mediaStreamAttributes[MediaSourceAttributesKeys.Duration] = mediaInfo["Duration"];
+                if (mediaInfo.ContainsKey("Duration"))
+                {
+                    mediaStreamAttributes[MediaSourceAttributesKeys.Duration] = mediaInfo["Duration"];
+                }
                 if (!isStreamCanSeek)
                 {
                     mediaStreamAttributes[MediaSourceAttributesKeys.CanSeek] = false.ToString();

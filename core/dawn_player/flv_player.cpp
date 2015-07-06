@@ -362,10 +362,9 @@ open_result flv_player::do_open(IMap<Platform::String^, Platform::String^>^ medi
         }
     }
     auto info = ref new Platform::Collections::Map<Platform::String^, Platform::String^>();
-    if (!duration) {
-        return open_result::error;
+    if (duration) {
+        info->Insert(L"Duration", ref new Platform::String(std::to_wstring(duration->get_value() * 10000000).c_str()));
     }
-    info->Insert(L"Duration", ref new Platform::String(std::to_wstring(duration->get_value() * 10000000).c_str()));
     if (!this->keyframes.empty()) {
         info->Insert(L"CanSeek", L"True");
     }

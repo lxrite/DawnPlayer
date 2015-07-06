@@ -84,7 +84,9 @@ IAsyncOperation<flv_media_stream_source^>^ flv_media_stream_source::create_async
         mss->CanSeek = stream_can_seek && (media_info->Lookup(L"CanSeek")->ToString() == L"True");
         // Set BufferTime to 0 to improve seek experience in Debug mode
         mss->BufferTime = TimeSpan{ 0 };
-        mss->Duration = TimeSpan{ std::stoll(media_info->Lookup(L"Duration")->ToString()->Data()) };
+        if (media_info->HasKey(L"Duration")) {
+            mss->Duration = TimeSpan{ std::stoll(media_info->Lookup(L"Duration")->ToString()->Data()) };
+        }
         auto flv_mss = ref new flv_media_stream_source();
         flv_mss->init(player, mss);
         return flv_mss;
