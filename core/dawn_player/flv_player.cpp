@@ -40,7 +40,7 @@ flv_player::flv_player() :
 
 flv_player::~flv_player()
 {
-    this->close();
+    this->close_player();
 }
 
 void flv_player::set_source(IRandomAccessStream^ random_access_stream)
@@ -107,7 +107,7 @@ void flv_player::end_seek()
     this->sample_producer_cv.notify_one();
 }
 
-void flv_player::close()
+void flv_player::close_player()
 {
     if (this->is_closed) {
         return;

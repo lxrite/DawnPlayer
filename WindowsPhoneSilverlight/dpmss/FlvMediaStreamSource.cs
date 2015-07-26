@@ -62,7 +62,7 @@ namespace DawnPlayer
 
         protected override void CloseMedia()
         {
-            flvPlayer.close();
+            flvPlayer.close_player();
             isClosed = true;
         }
 

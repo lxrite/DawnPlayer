@@ -98,7 +98,7 @@ public:
     IAsyncOperation<get_sample_result>^ get_sample_async(sample_type type, IMap<Platform::String^, Platform::Object^>^ sample_info);
     IAsyncOperation<std::int64_t>^ begin_seek(std::int64_t seek_to_time);
     void end_seek();
-    void close();
+    void close_player();
 
     std::int64_t get_position();
 private:

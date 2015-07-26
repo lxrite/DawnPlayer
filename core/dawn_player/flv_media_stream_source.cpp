@@ -47,7 +47,7 @@ IAsyncOperation<flv_media_stream_source^>^ flv_media_stream_source::create_async
         auto callback_token = ct.register_callback([player, cancel_flag]() {
             bool exp = false;
             if (cancel_flag->compare_exchange_strong(exp, true)) {
-                player->close();
+                player->close_player();
             }
         });
         auto result = shared_task->get();
@@ -58,7 +58,7 @@ IAsyncOperation<flv_media_stream_source^>^ flv_media_stream_source::create_async
             throw ref new Platform::OperationCanceledException("Operation canceled.");
         }
         if (result != open_result::ok) {
-            player->close();
+            player->close_player();
             throw ref new Platform::FailureException("Failed to open FLV file.");
         }
         auto acpd_w = media_info->Lookup(L"AudioCodecPrivateData")->ToString();
@@ -101,7 +101,7 @@ MediaStreamSource^ flv_media_stream_source::unwrap()
 flv_media_stream_source::~flv_media_stream_source()
 {
     if (this->player) {
-        this->player->close();
+        this->player->close_player();
         this->player = nullptr;
     }
     if (this->mss) {
