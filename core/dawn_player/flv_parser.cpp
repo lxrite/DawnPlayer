@@ -1,7 +1,7 @@
 /*
  *    flv_parser.cpp:
  *
- *    Copyright (C) 2015 limhiaoing <blog.poxiao.me> All Rights Reserved.
+ *    Copyright (C) 2015-2016 limhiaoing <blog.poxiao.me> All Rights Reserved.
  *
  */
 
@@ -75,9 +75,6 @@ parse_result flv_parser::parse_flv_tags(const std::uint8_t* data, size_t size, s
             break;
         }
         std::uint8_t tag_type = data[offset++];
-        if (tag_type != 8 && tag_type != 9 && tag_type != 18) {
-            return parse_result::error;
-        }
 
         // DataSize          UI24               Length of the data in the Data field
         if (size <= offset + 3) {
@@ -497,6 +494,10 @@ parse_result flv_parser::parse_flv_tags(const std::uint8_t* data, size_t size, s
             else {
                 assert(false);
             }
+        }
+        else {
+            // ignore unknown tag
+            offset += tag_data_size;
         }
         offset += 4;
         bytes_consumed = offset;
