@@ -1,7 +1,7 @@
 /*
 *    http_random_access_stream.cpp:
 *
-*    Copyright (C) 2015 limhiaoing <blog.poxiao.me> All Rights Reserved.
+*    Copyright (C) 2015-2017 Light Lin <blog.poxiao.me> All Rights Reserved.
 *
 */
 
