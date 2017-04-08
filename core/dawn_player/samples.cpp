@@ -5,7 +5,6 @@
  *
  */
 
-#include "pch.h"
 #include "samples.hpp"
 
 namespace dawn_player {

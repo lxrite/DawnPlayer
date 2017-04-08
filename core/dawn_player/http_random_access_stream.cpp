@@ -5,9 +5,9 @@
 *
 */
 
-#include "pch.h"
-
 #include <string>
+
+#include <ppltasks.h>
 
 #include "http_random_access_stream.hpp"
 

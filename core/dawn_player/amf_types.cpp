@@ -5,8 +5,6 @@
  *
  */
 
-#include "pch.h"
-
 #include <algorithm>
 #include <cassert>
 

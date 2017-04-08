@@ -5,11 +5,12 @@
 *
 */
 
-#include "pch.h"
-
 #include <algorithm>
 #include <memory>
 #include <string>
+
+#include <collection.h>
+#include <ppltasks.h>
 
 #include "flv_media_stream_source.hpp"
 #include "flv_player.hpp"

@@ -5,8 +5,6 @@
  *
  */
 
-#include "pch.h"
-
 #include <cassert>
 #include <tuple>
 #include <utility>

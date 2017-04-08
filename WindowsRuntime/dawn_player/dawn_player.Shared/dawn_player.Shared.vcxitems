@@ -21,17 +21,25 @@
     <ClInclude Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\samples.hpp" />
     <ClInclude Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\flv_media_stream_source.hpp" />
     <ClInclude Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\http_random_access_stream.hpp" />
-    <ClInclude Include="$(MSBuildThisFileDirectory)pch.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\amf_types.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\flv_parser.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\flv_player.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\samples.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\flv_media_stream_source.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\http_random_access_stream.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)pch.cpp">
-      <PrecompiledHeader>Create</PrecompiledHeader>
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\amf_types.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\flv_parser.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\flv_player.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\samples.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\flv_media_stream_source.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\..\..\core\dawn_player\http_random_access_stream.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

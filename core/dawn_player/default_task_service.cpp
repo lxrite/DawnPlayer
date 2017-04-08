@@ -5,8 +5,6 @@
 *
 */
 
-#include "pch.h"
-
 #include <thread>
 
 #include "default_task_service.hpp"
