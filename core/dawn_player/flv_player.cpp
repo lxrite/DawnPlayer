@@ -86,7 +86,7 @@ task<audio_sample> flv_player::get_audio_sample()
 {
     auto tce = task_completion_event<audio_sample>();
     auto result_task = task<audio_sample>(tce);
-    this->audio_sample_tce_queue.push(tce);
+    this->audio_sample_tce_queue.push_back(tce);
     this->deliver_samples();
     return result_task;
 }
@@ -95,7 +95,7 @@ task<video_sample> flv_player::get_video_sample()
 {
     auto tce = task_completion_event<video_sample>();
     auto result_task = task<video_sample>(tce);
-    this->video_sample_tce_queue.push(tce);
+    this->video_sample_tce_queue.push_back(tce);
     this->deliver_samples();
     return result_task;
 }
@@ -429,7 +429,7 @@ void flv_player::deliver_samples()
             auto sample = std::move(this->audio_sample_queue.front());
             this->audio_sample_queue.pop_front();
             auto tce = this->audio_sample_tce_queue.front();
-            this->audio_sample_tce_queue.pop();
+            this->audio_sample_tce_queue.pop_front();
             tce.set(sample);
             brk = false;
         }
@@ -437,7 +437,7 @@ void flv_player::deliver_samples()
             auto sample = std::move(this->video_sample_queue.front());
             this->video_sample_queue.pop_front();
             auto tce = this->video_sample_tce_queue.front();
-            this->video_sample_tce_queue.pop();
+            this->video_sample_tce_queue.pop_front();
             tce.set(sample);
             brk = false;
             this->position = sample.timestamp;
@@ -446,15 +446,28 @@ void flv_player::deliver_samples()
             break;
         }
     }
+    if (this->is_error_ocurred) {
+        if (!this->audio_sample_tce_queue.empty()) {
+            auto tce = this->audio_sample_tce_queue.front();
+            tce.set_exception(get_sample_error("errror ocurred", get_sample_error_code::other));
+        }
+        else if (!this->video_sample_tce_queue.empty()) {
+            auto tce = this->video_sample_tce_queue.front();
+            tce.set_exception(get_sample_error("errror ocurred", get_sample_error_code::other));
+        }
+        this->audio_sample_tce_queue.clear();
+        this->video_sample_tce_queue.clear();
+        return;
+    }
     if (this->is_end_of_stream) {
         if (!this->audio_sample_tce_queue.empty()) {
             auto tce = this->audio_sample_tce_queue.front();
-            this->audio_sample_tce_queue.pop();
+            this->audio_sample_tce_queue.clear();
             tce.set_exception(get_sample_error("end of stream", get_sample_error_code::end_of_stream));
         }
         if (!this->video_sample_tce_queue.empty()) {
             auto tce = this->video_sample_tce_queue.front();
-            this->video_sample_tce_queue.pop();
+            this->video_sample_tce_queue.clear();
             tce.set_exception(get_sample_error("end of stream", get_sample_error_code::end_of_stream));
         }
     }

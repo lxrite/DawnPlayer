@@ -52,8 +52,8 @@ class flv_player : public std::enable_shared_from_this<flv_player> {
     std::map<double, std::uint64_t, std::greater<double>> keyframes;
 
     std::queue<task_completion_event<std::int64_t>> get_start_position_tce_queue;
-    std::queue<task_completion_event<audio_sample>> audio_sample_tce_queue;
-    std::queue<task_completion_event<video_sample>> video_sample_tce_queue;
+    std::deque<task_completion_event<audio_sample>> audio_sample_tce_queue;
+    std::deque<task_completion_event<video_sample>> video_sample_tce_queue;
     std::queue<task_completion_event<std::int64_t>> seek_tce_queue;
     std::queue<task_completion_event<void>> close_tce_queue;
 
