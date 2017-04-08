@@ -50,7 +50,7 @@ namespace Demo
                 var folders = await applicationFolder.GetFoldersAsync();
                 var storageFile = await applicationFolder.GetFileAsync("Assets\\test.flv");
                 var randomAccessStream = await storageFile.OpenReadAsync();
-                fmss = await flv_media_stream_source.create_async(randomAccessStream);
+                fmss = await flv_media_stream_source.create(randomAccessStream);
                 isOpening = false;
                 mediaElement.SetMediaStreamSource(fmss.unwrap());
                 mediaElement.Play();

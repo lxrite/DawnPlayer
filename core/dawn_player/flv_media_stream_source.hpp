@@ -8,7 +8,10 @@
 #ifndef DAWN_PLAYER_FLV_MEDIA_STREAM_SOURCE_HPP
 #define DAWN_PLAYER_FLV_MEDIA_STREAM_SOURCE_HPP
 
+#include <memory>
+
 #include "flv_player.hpp"
+#include "task_service.hpp"
 
 using namespace Windows::Foundation;
 using namespace Windows::Media::Core;
@@ -18,14 +21,15 @@ namespace dawn_player {
 
 public ref class flv_media_stream_source sealed {
 private:
-    flv_player^ player;
+    std::shared_ptr<task_service> tsk_service;
+    std::shared_ptr<flv_player> player;
     MediaStreamSource^ mss;
 private:
     flv_media_stream_source();
-    void init(flv_player^ player, MediaStreamSource^ mss);
+    void init(const std::shared_ptr<flv_player>& player, MediaStreamSource^ mss);
 public:
-    static IAsyncOperation<flv_media_stream_source^>^ create_async(IRandomAccessStream^ random_access_stream);
-    static IAsyncOperation<flv_media_stream_source^>^ create_async(IRandomAccessStream^ random_access_stream, bool stream_can_seek);
+    static IAsyncOperation<flv_media_stream_source^>^ create(IRandomAccessStream^ random_access_stream);
+    static IAsyncOperation<flv_media_stream_source^>^ create(IRandomAccessStream^ random_access_stream, bool stream_can_seek);
     MediaStreamSource^ unwrap();
     virtual ~flv_media_stream_source();
 private:
