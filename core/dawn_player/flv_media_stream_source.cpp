@@ -119,17 +119,26 @@ void flv_media_stream_source::on_starting(MediaStreamSource^ sender, MediaStream
 {
     auto request = args->Request;
     auto deferral = request->GetDeferral();
-    this->tsk_service->post_task([this, request, deferral]() {
+    auto tsk_service = this->tsk_service;
+    auto wp_player = std::weak_ptr<flv_player>(this->player);
+    tsk_service->post_task([tsk_service, wp_player, request, deferral]() {
         auto start_position = request->StartPosition;
         if (start_position == nullptr) {
-            request->SetActualStartPosition(TimeSpan{ this->player->get_start_position() });
-            deferral->Complete();
+            auto player = wp_player.lock();
+            if (player) {
+                request->SetActualStartPosition(TimeSpan{ player->get_start_position() });
+                deferral->Complete();
+            }
         }
         else {
-            create_async([this, start_position, request, deferral]() {
-                return this->player->seek(start_position->Value.Duration)
-                .then([this, request, deferral](task<std::int64_t> tsk) {
-                    this->tsk_service->post_task([tsk, request, deferral]() {
+            create_async([tsk_service, wp_player, start_position, request, deferral]() {
+                auto player = wp_player.lock();
+                if (!player) {
+                    return task_from_result();
+                }
+                return player->seek(start_position->Value.Duration)
+                .then([tsk_service, request, deferral](task<std::int64_t> tsk) {
+                    tsk_service->post_task([tsk, request, deferral]() {
                         auto seek_to_time = tsk.get();
                         request->SetActualStartPosition(TimeSpan{ seek_to_time });
                         deferral->Complete();
@@ -144,12 +153,18 @@ void flv_media_stream_source::on_sample_requested(MediaStreamSource^ sender, Med
 {
     auto request = args->Request;
     auto deferral = request->GetDeferral();
-    this->tsk_service->post_task([this, sender, request, deferral]() {
+    auto tsk_service = this->tsk_service;
+    auto wp_player = std::weak_ptr<flv_player>(this->player);
+    tsk_service->post_task([tsk_service, wp_player, sender, request, deferral]() {
         if (request->StreamDescriptor->GetType()->FullName == AudioStreamDescriptor::typeid->FullName) {
-            create_async([this, sender, request, deferral]() {
-                return this->player->get_audio_sample()
-                    .then([this, sender, request, deferral](task<audio_sample> tsk) {
-                    this->tsk_service->post_task([this, sender, request, deferral, tsk]() {
+            create_async([tsk_service, wp_player, sender, request, deferral]() {
+                auto player = wp_player.lock();
+                if (!player) {
+                    return task_from_result();
+                }
+                return player->get_audio_sample()
+                    .then([tsk_service, sender, request, deferral](task<audio_sample> tsk) {
+                    tsk_service->post_task([sender, request, deferral, tsk]() {
                         try {
                             audio_sample sample = tsk.get();
                             auto data_writer = ref new DataWriter();
@@ -173,15 +188,23 @@ void flv_media_stream_source::on_sample_requested(MediaStreamSource^ sender, Med
             }); 
         }
         else if (request->StreamDescriptor->GetType()->FullName == VideoStreamDescriptor::typeid->FullName) {
-            create_async([this, sender, request, deferral]() {
-                return this->player->get_video_sample()
-                .then([this, sender, request, deferral](task<video_sample> tsk) {
-                    this->tsk_service->post_task([this, sender, request, deferral, tsk]() {
+            create_async([tsk_service, wp_player, sender, request, deferral]() {
+                auto player = wp_player.lock();
+                if (!player) {
+                    return task_from_result();
+                }
+                return player->get_video_sample()
+                .then([tsk_service, wp_player, sender, request, deferral](task<video_sample> tsk) {
+                    tsk_service->post_task([wp_player, sender, request, deferral, tsk]() {
+                        auto player = wp_player.lock();
+                        if (!player) {
+                            return;
+                        }
                         try {
                             video_sample sample = tsk.get();
                             auto data_writer = ref new DataWriter();
                             if (sample.is_key_frame) {
-                                const auto& sps = this->player->get_sps();
+                                const auto& sps = player->get_sps();
                                 if (!sps.empty()) {
                                     data_writer->WriteByte(0);
                                     data_writer->WriteByte(0);
@@ -190,7 +213,7 @@ void flv_media_stream_source::on_sample_requested(MediaStreamSource^ sender, Med
                                         data_writer->WriteByte(byte);
                                     }
                                 }
-                                const auto& pps = this->player->get_pps();
+                                const auto& pps = player->get_pps();
                                 if (!pps.empty()) {
                                     data_writer->WriteByte(0);
                                     data_writer->WriteByte(0);
