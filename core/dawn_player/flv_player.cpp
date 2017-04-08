@@ -141,28 +141,34 @@ task<std::uint32_t> flv_player::read_some_data()
     auto result_task = task<std::uint32_t>(tce);
     auto self(this->shared_from_this());
     create_async([this, self, tce]() {
-        return create_task(this->video_file_stream->ReadAsync(ref new Buffer(65536), 65536, InputStreamOptions::Partial))
-        .then([this, self, tce](task<IBuffer^> tsk) {
-            this->tsk_service->post_task([this, self, tce, tsk]() {
-                IBuffer^ buffer = nullptr;
-                try {
-                    buffer = tsk.get();
-                }
-                catch (...) {
-                    tce.set_exception(std::current_exception());
-                    return;
-                }
-                std::uint32_t size = buffer->Length;
-                if (size != 0) {
-                    this->read_buffer.reserve(this->read_buffer.size() + size);
-                    auto data_reader = DataReader::FromBuffer(buffer);
-                    for (std::uint32_t i = 0; i != size; ++i) {
-                        this->read_buffer.push_back(data_reader->ReadByte());
+        try {
+            return create_task(this->video_file_stream->ReadAsync(ref new Buffer(65536), 65536, InputStreamOptions::Partial))
+                .then([this, self, tce](task<IBuffer^> tsk) {
+                this->tsk_service->post_task([this, self, tce, tsk]() {
+                    IBuffer^ buffer = nullptr;
+                    try {
+                        buffer = tsk.get();
                     }
-                }
-                tce.set(size);
+                    catch (...) {
+                        tce.set_exception(std::current_exception());
+                        return;
+                    }
+                    std::uint32_t size = buffer->Length;
+                    if (size != 0) {
+                        this->read_buffer.reserve(this->read_buffer.size() + size);
+                        auto data_reader = DataReader::FromBuffer(buffer);
+                        for (std::uint32_t i = 0; i != size; ++i) {
+                            this->read_buffer.push_back(data_reader->ReadByte());
+                        }
+                    }
+                    tce.set(size);
+                });
             });
-        });
+        }
+        catch (Platform::ObjectDisposedException^) {
+            tce.set_exception(std::runtime_error("video file stream disposed"));
+            return task_from_result();
+        }
     });
     return result_task;
 }
@@ -479,12 +485,17 @@ void flv_player::handle_seek()
         position = iter->second;
         time = iter->first;
     }
-    this->video_file_stream->Seek(position);
     this->read_buffer.clear();
     this->audio_sample_queue.clear();
     this->video_sample_queue.clear();
     this->is_error_ocurred = false;
     this->is_end_of_stream = false;
+    try {
+        this->video_file_stream->Seek(position);
+    }
+    catch (Platform::ObjectDisposedException^) {
+        this->is_error_ocurred = true;
+    }
     auto seek_to_time = static_cast<std::int64_t>(time * 10000000);
     while (!this->seek_tce_queue.empty()) {
         auto tce = this->seek_tce_queue.front();
