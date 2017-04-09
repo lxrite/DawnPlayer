@@ -12,10 +12,11 @@
 #include "error.hpp"
 #include "flv_media_stream_source.hpp"
 #include "flv_player.hpp"
+#include "io.hpp"
 
 using namespace concurrency;
 using namespace dawn_player;
-
+using namespace dawn_player::io;
 using namespace Windows::Media::MediaProperties;
 
 namespace DawnPlayer {
@@ -35,12 +36,12 @@ void FlvMediaStreamSource::init(const std::shared_ptr<flv_player>& player, Media
 
 IAsyncOperation<FlvMediaStreamSource^>^ FlvMediaStreamSource::CreateFromRandomAccessStreamAsync(IRandomAccessStream^ randomAccessStream)
 {
+    auto stream_proxy = std::make_shared<ramdon_access_read_stream_proxy>(randomAccessStream);
     auto tce = task_completion_event<FlvMediaStreamSource^>();
     auto result_task = task<FlvMediaStreamSource^>(tce);
     auto tsk_service = std::make_shared<default_task_service>();
-    tsk_service->post_task([tsk_service, randomAccessStream, tce]() {
-        auto player = std::make_shared<flv_player>(tsk_service);
-        player->set_source(randomAccessStream);
+    tsk_service->post_task([tsk_service, stream_proxy, tce]() {
+        auto player = std::make_shared<flv_player>(tsk_service, stream_proxy);
         player->open()
         .then([tsk_service, player, tce](task<std::map<std::string, std::string>> tsk) {
             tsk_service->post_task([player, tce, tsk]() {

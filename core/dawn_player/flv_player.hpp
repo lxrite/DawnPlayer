@@ -8,6 +8,7 @@
 #ifndef DAWN_PLAYER_FLV_PLAYER_HPP
 #define DAWN_PLAYER_FLV_PLAYER_HPP
 
+#include <array>
 #include <cstdint>
 #include <deque>
 #include <functional>
@@ -20,11 +21,13 @@
 
 #include "amf_types.hpp"
 #include "flv_parser.hpp"
+#include "io.hpp"
 #include "task_service.hpp"
 
 using namespace Windows::Storage::Streams;
 using namespace concurrency;
 using namespace dawn_player::amf;
+using namespace dawn_player::io;
 using namespace dawn_player::sample;
 using namespace dawn_player::parser;
 
@@ -32,7 +35,8 @@ namespace dawn_player {
 
 class flv_player : public std::enable_shared_from_this<flv_player> {
     std::shared_ptr<task_service> tsk_service;
-    IRandomAccessStream^ video_file_stream;
+    std::shared_ptr<read_stream_proxy> stream_proxy;
+    std::array<std::uint8_t, 65536> stream_proxy_read_buffer;
     std::vector<std::uint8_t> read_buffer;
     flv_parser parser;
 
@@ -64,9 +68,8 @@ class flv_player : public std::enable_shared_from_this<flv_player> {
     std::int64_t start_position;
 
 public:
-    explicit flv_player(const std::shared_ptr<task_service>& task_service);
+    explicit flv_player(const std::shared_ptr<task_service>& task_service, const std::shared_ptr<read_stream_proxy>& stream_proxy);
     virtual ~flv_player();
-    void set_source(IRandomAccessStream^ random_access_stream);
     task<std::map<std::string, std::string>> open();
     std::int64_t get_start_position() const;
     task<audio_sample> get_audio_sample();

@@ -13,8 +13,9 @@ namespace dawn_player {
 
 static const size_t BUFFER_QUEUE_DEFICIENT_SIZE = 50;
 
-flv_player::flv_player(const std::shared_ptr<task_service>& tsk_service)
+flv_player::flv_player(const std::shared_ptr<task_service>& tsk_service, const std::shared_ptr<read_stream_proxy>& stream_proxy)
     : tsk_service(tsk_service)
+    , stream_proxy(stream_proxy)
     , is_video_cfg_read(false)
     , is_audio_cfg_read(false)
     , position(0)
@@ -29,12 +30,6 @@ flv_player::flv_player(const std::shared_ptr<task_service>& tsk_service)
 
 flv_player::~flv_player()
 {
-    video_file_stream = nullptr;
-}
-
-void flv_player::set_source(IRandomAccessStream^ random_access_stream)
-{
-    this->video_file_stream = random_access_stream;
 }
 
 task<std::map<std::string, std::string>> flv_player::open()
@@ -142,24 +137,20 @@ task<std::uint32_t> flv_player::read_some_data()
     auto self(this->shared_from_this());
     create_async([this, self, tce]() {
         try {
-            return create_task(this->video_file_stream->ReadAsync(ref new Buffer(65536), 65536, InputStreamOptions::Partial))
-                .then([this, self, tce](task<IBuffer^> tsk) {
+            return this->stream_proxy->read(this->stream_proxy_read_buffer.data(), this->stream_proxy_read_buffer.size())
+            .then([this, self, tce](task<std::uint32_t> tsk) {
                 this->tsk_service->post_task([this, self, tce, tsk]() {
-                    IBuffer^ buffer = nullptr;
+                    std::uint32_t size = 0;
                     try {
-                        buffer = tsk.get();
+                        size = tsk.get();
                     }
                     catch (...) {
                         tce.set_exception(std::current_exception());
                         return;
                     }
-                    std::uint32_t size = buffer->Length;
                     if (size != 0) {
                         this->read_buffer.reserve(this->read_buffer.size() + size);
-                        auto data_reader = DataReader::FromBuffer(buffer);
-                        for (std::uint32_t i = 0; i != size; ++i) {
-                            this->read_buffer.push_back(data_reader->ReadByte());
-                        }
+                        std::copy(this->stream_proxy_read_buffer.begin(), this->stream_proxy_read_buffer.begin() + size, std::back_inserter(this->read_buffer));
                     }
                     tce.set(size);
                 });
@@ -504,9 +495,9 @@ void flv_player::handle_seek()
     this->is_error_ocurred = false;
     this->is_end_of_stream = false;
     try {
-        this->video_file_stream->Seek(position);
+        this->stream_proxy->seek(position);
     }
-    catch (Platform::ObjectDisposedException^) {
+    catch (...) {
         this->is_error_ocurred = true;
     }
     auto seek_to_time = static_cast<std::int64_t>(time * 10000000);

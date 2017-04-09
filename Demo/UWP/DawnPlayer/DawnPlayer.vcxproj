@@ -213,6 +213,7 @@
     <ClInclude Include="..\..\..\core\dawn_player\flv_media_stream_source.hpp" />
     <ClInclude Include="..\..\..\core\dawn_player\flv_parser.hpp" />
     <ClInclude Include="..\..\..\core\dawn_player\flv_player.hpp" />
+    <ClInclude Include="..\..\..\core\dawn_player\io.hpp" />
     <ClInclude Include="..\..\..\core\dawn_player\samples.hpp" />
     <ClInclude Include="..\..\..\core\dawn_player\task_service.hpp" />
   </ItemGroup>
@@ -223,6 +224,7 @@
     <ClCompile Include="..\..\..\core\dawn_player\flv_media_stream_source.cpp" />
     <ClCompile Include="..\..\..\core\dawn_player\flv_parser.cpp" />
     <ClCompile Include="..\..\..\core\dawn_player\flv_player.cpp" />
+    <ClCompile Include="..\..\..\core\dawn_player\io.cpp" />
     <ClCompile Include="..\..\..\core\dawn_player\samples.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

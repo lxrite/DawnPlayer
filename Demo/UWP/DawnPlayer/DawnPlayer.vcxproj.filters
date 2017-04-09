@@ -14,6 +14,7 @@
     <ClCompile Include="..\..\..\core\dawn_player\flv_parser.cpp" />
     <ClCompile Include="..\..\..\core\dawn_player\flv_player.cpp" />
     <ClCompile Include="..\..\..\core\dawn_player\samples.cpp" />
+    <ClCompile Include="..\..\..\core\dawn_player\io.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\core\dawn_player\amf_decode.hpp" />
@@ -25,5 +26,6 @@
     <ClInclude Include="..\..\..\core\dawn_player\flv_player.hpp" />
     <ClInclude Include="..\..\..\core\dawn_player\samples.hpp" />
     <ClInclude Include="..\..\..\core\dawn_player\task_service.hpp" />
+    <ClInclude Include="..\..\..\core\dawn_player\io.hpp" />
   </ItemGroup>
 </Project>
