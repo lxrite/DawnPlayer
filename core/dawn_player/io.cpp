@@ -74,7 +74,7 @@ input_read_stream_proxy::input_read_stream_proxy(IInputStream^ stream)
 
 input_read_stream_proxy::~input_read_stream_proxy()
 {
-    
+    this->target = nullptr;
 }
 
 bool input_read_stream_proxy::can_seek() const
