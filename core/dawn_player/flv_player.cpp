@@ -465,9 +465,10 @@ void flv_player::deliver_samples()
             this->video_sample_tce_queue.clear();
             tce.set_exception(get_sample_error("end of stream", get_sample_error_code::end_of_stream));
         }
+        return;
     }
     if ((this->audio_sample_queue.size() < BUFFER_QUEUE_DEFICIENT_SIZE || this->video_sample_queue.size() < BUFFER_QUEUE_DEFICIENT_SIZE) && !this->is_sample_reading) {
-        if (!this->is_closed && !this->is_end_of_stream && !this->is_error_ocurred) {
+        if (!this->is_closed && this->audio_sample_queue.size() < 3 * BUFFER_QUEUE_DEFICIENT_SIZE && this->video_sample_queue.size() < 3 * BUFFER_QUEUE_DEFICIENT_SIZE) {
             this->read_more_sample();
         }
     }
