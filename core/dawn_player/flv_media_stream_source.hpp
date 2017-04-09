@@ -17,21 +17,25 @@ using namespace Windows::Foundation;
 using namespace Windows::Media::Core;
 using namespace Windows::Storage::Streams;
 
-namespace dawn_player {
+using namespace dawn_player;
 
-public ref class flv_media_stream_source sealed {
+namespace DawnPlayer {
+
+public ref class FlvMediaStreamSource sealed {
 private:
     std::shared_ptr<task_service> tsk_service;
     std::shared_ptr<flv_player> player;
     MediaStreamSource^ mss;
 private:
-    flv_media_stream_source();
+    FlvMediaStreamSource();
     void init(const std::shared_ptr<flv_player>& player, MediaStreamSource^ mss);
 public:
-    static IAsyncOperation<flv_media_stream_source^>^ create(IRandomAccessStream^ random_access_stream);
-    static IAsyncOperation<flv_media_stream_source^>^ create(IRandomAccessStream^ random_access_stream, bool stream_can_seek);
-    MediaStreamSource^ unwrap();
-    virtual ~flv_media_stream_source();
+    static IAsyncOperation<FlvMediaStreamSource^>^ CreateFromRandomAccessStreamAsync(IRandomAccessStream^ randomAccessStream);
+    property MediaStreamSource^ Source
+    {
+        MediaStreamSource^ get();
+    }
+    virtual ~FlvMediaStreamSource();
 private:
     void on_starting(MediaStreamSource^ sender, MediaStreamSourceStartingEventArgs^ args);
     void on_sample_requested(MediaStreamSource^ sender, MediaStreamSourceSampleRequestedEventArgs^ args);
@@ -39,6 +43,6 @@ private:
     Windows::Foundation::EventRegistrationToken sample_requested_event_token;
 };
 
-} // namespace dawn_player
+} // namespace DawnPlayer
 
 #endif

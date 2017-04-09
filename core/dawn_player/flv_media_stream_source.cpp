@@ -16,40 +16,34 @@
 using namespace concurrency;
 using namespace dawn_player;
 
-using namespace Windows::Foundation::Collections;
 using namespace Windows::Media::MediaProperties;
 
-namespace dawn_player {
+namespace DawnPlayer {
 
-flv_media_stream_source::flv_media_stream_source()
+FlvMediaStreamSource::FlvMediaStreamSource()
 {
 }
 
-void flv_media_stream_source::init(const std::shared_ptr<flv_player>& player, MediaStreamSource^ mss)
+void FlvMediaStreamSource::init(const std::shared_ptr<flv_player>& player, MediaStreamSource^ mss)
 {
     this->player = player;
     this->mss = mss;
     this->tsk_service = this->player->get_task_service();
-    starting_event_token = this->mss->Starting += ref new TypedEventHandler<MediaStreamSource^, MediaStreamSourceStartingEventArgs^>(this, &flv_media_stream_source::on_starting);
-    sample_requested_event_token = this->mss->SampleRequested += ref new TypedEventHandler<MediaStreamSource^, MediaStreamSourceSampleRequestedEventArgs^>(this, &flv_media_stream_source::on_sample_requested);
+    starting_event_token = this->mss->Starting += ref new TypedEventHandler<MediaStreamSource^, MediaStreamSourceStartingEventArgs^>(this, &FlvMediaStreamSource::on_starting);
+    sample_requested_event_token = this->mss->SampleRequested += ref new TypedEventHandler<MediaStreamSource^, MediaStreamSourceSampleRequestedEventArgs^>(this, &FlvMediaStreamSource::on_sample_requested);
 }
 
-IAsyncOperation<flv_media_stream_source^>^ flv_media_stream_source::create(IRandomAccessStream^ random_access_stream)
+IAsyncOperation<FlvMediaStreamSource^>^ FlvMediaStreamSource::CreateFromRandomAccessStreamAsync(IRandomAccessStream^ randomAccessStream)
 {
-    return create(random_access_stream, true);
-}
-
-IAsyncOperation<flv_media_stream_source^>^ flv_media_stream_source::create(IRandomAccessStream^ random_access_stream, bool stream_can_seek)
-{
-    auto tce = task_completion_event<flv_media_stream_source^>();
-    auto result_task = task<flv_media_stream_source^>(tce);
+    auto tce = task_completion_event<FlvMediaStreamSource^>();
+    auto result_task = task<FlvMediaStreamSource^>(tce);
     auto tsk_service = std::make_shared<default_task_service>();
-    tsk_service->post_task([tsk_service, random_access_stream, stream_can_seek, tce]() {
+    tsk_service->post_task([tsk_service, randomAccessStream, tce]() {
         auto player = std::make_shared<flv_player>(tsk_service);
-        player->set_source(random_access_stream);
+        player->set_source(randomAccessStream);
         player->open()
-        .then([tsk_service, player, stream_can_seek, tce](task<std::map<std::string, std::string>> tsk) {
-            tsk_service->post_task([player, stream_can_seek, tce, tsk]() {
+        .then([tsk_service, player, tce](task<std::map<std::string, std::string>> tsk) {
+            tsk_service->post_task([player, tce, tsk]() {
                 std::map<std::string, std::string> info;
                 try {
                     info = tsk.get();
@@ -74,14 +68,14 @@ IAsyncOperation<flv_media_stream_source^>^ flv_media_stream_source::create(IRand
                 auto vsd = ref new VideoStreamDescriptor(vep);
                 auto mss = ref new MediaStreamSource(asd);
                 mss->AddStreamDescriptor(vsd);
-                mss->CanSeek = stream_can_seek && info["CanSeek"] == "True";
+                mss->CanSeek = info["CanSeek"] == "True";
                 // Set BufferTime to 0 to improve seek experience in Debug mode
                 mss->BufferTime = TimeSpan{ 0 };
                 auto iter_duration = info.find("Duration");
                 if (iter_duration != info.end()) {
                     mss->Duration = TimeSpan{ std::stoll(std::get<1>(*iter_duration)) };
                 }
-                auto flv_mss = ref new flv_media_stream_source();
+                auto flv_mss = ref new FlvMediaStreamSource();
                 flv_mss->init(player, mss);
                 tce.set(flv_mss);
             });
@@ -92,12 +86,12 @@ IAsyncOperation<flv_media_stream_source^>^ flv_media_stream_source::create(IRand
     });
 }
 
-MediaStreamSource^ flv_media_stream_source::unwrap()
+MediaStreamSource^ FlvMediaStreamSource::Source::get()
 {
     return this->mss;
 }
 
-flv_media_stream_source::~flv_media_stream_source()
+FlvMediaStreamSource::~FlvMediaStreamSource()
 {
     if (this->player) {
         auto player = this->player;
@@ -115,7 +109,7 @@ flv_media_stream_source::~flv_media_stream_source()
     }
 }
 
-void flv_media_stream_source::on_starting(MediaStreamSource^ sender, MediaStreamSourceStartingEventArgs^ args)
+void FlvMediaStreamSource::on_starting(MediaStreamSource^ sender, MediaStreamSourceStartingEventArgs^ args)
 {
     auto request = args->Request;
     auto deferral = request->GetDeferral();
@@ -149,7 +143,7 @@ void flv_media_stream_source::on_starting(MediaStreamSource^ sender, MediaStream
     });
 }
 
-void flv_media_stream_source::on_sample_requested(MediaStreamSource^ sender, MediaStreamSourceSampleRequestedEventArgs^ args)
+void FlvMediaStreamSource::on_sample_requested(MediaStreamSource^ sender, MediaStreamSourceSampleRequestedEventArgs^ args)
 {
     auto request = args->Request;
     auto deferral = request->GetDeferral();
@@ -247,4 +241,4 @@ void flv_media_stream_source::on_sample_requested(MediaStreamSource^ sender, Med
     });
 }
 
-} // namespace dawn_player
+} // namespace DawnPlayer
