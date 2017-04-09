@@ -86,6 +86,10 @@ IAsyncOperation<FlvMediaStreamSource^>^ FlvMediaStreamSource::create_from_read_s
                     tce.set_exception(ref new Platform::FailureException("Failed to open FLV file."));
                     return;
                 }
+                catch (const task_canceled&) {
+                    tce.set_exception(ref new Platform::FailureException("Operation canceled."));
+                    return;
+                }
                 std::string acpd = info["AudioCodecPrivateData"];
                 unsigned int channel_count = std::stol(acpd.substr(4, 2), 0, 16) + std::stol(acpd.substr(6, 2), 0, 16) * 0x100;
                 unsigned int sample_rate = std::stol(acpd.substr(8, 2), 0, 16) + std::stol(acpd.substr(10, 2), 0, 16) * 0x100 +
@@ -144,7 +148,13 @@ void FlvMediaStreamSource::on_starting(MediaStreamSource^ sender, MediaStreamSou
                 return player->seek(start_position->Value.Duration)
                 .then([tsk_service, request, deferral](task<std::int64_t> tsk) {
                     tsk_service->post_task([tsk, request, deferral]() {
-                        auto seek_to_time = tsk.get();
+                        std::int64_t seek_to_time = 0;
+                        try {
+                            seek_to_time = tsk.get();
+                        }
+                        catch (const task_canceled&) {
+                            return;
+                        }
                         request->SetActualStartPosition(TimeSpan{ seek_to_time });
                         deferral->Complete();
                     });
@@ -186,6 +196,9 @@ void FlvMediaStreamSource::on_sample_requested(MediaStreamSource^ sender, MediaS
                             else {
                                 sender->NotifyError(MediaStreamSourceErrorStatus::Other);
                             }
+                        }
+                        catch (const task_canceled&) {
+                            return;
                         }
                         deferral->Complete();
                     });
@@ -243,6 +256,9 @@ void FlvMediaStreamSource::on_sample_requested(MediaStreamSource^ sender, MediaS
                             else {
                                 sender->NotifyError(MediaStreamSourceErrorStatus::Other);
                             }
+                        }
+                        catch (const task_canceled&) {
+                            return;
                         }
                         deferral->Complete();
                     });
