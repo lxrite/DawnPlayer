@@ -23,8 +23,10 @@ flv_player::flv_player(const std::shared_ptr<task_service>& tsk_service, const s
     , is_error_ocurred(false)
     , is_sample_reading(false)
     , last_seek_to_time(0)
-    , start_position(0)
     , is_closed(false)
+    , first_sample_timestamp_has_value(false)
+    , first_sample_timestamp(0)
+    , can_seek(false)
 {
 }
 
@@ -70,11 +72,6 @@ task<std::map<std::string, std::string>> flv_player::open()
         });
     });
     return result_task;
-}
-
-std::int64_t flv_player::get_start_position() const
-{
-    return this->start_position;
 }
 
 task<audio_sample> flv_player::get_audio_sample()
@@ -246,8 +243,7 @@ task<void> flv_player::parse_meta_data()
                     std::memmove(this->read_buffer.data(), this->read_buffer.data() + bytes_consumed, this->read_buffer.size() - bytes_consumed);
                     this->read_buffer.resize(this->read_buffer.size() - bytes_consumed);
                 }
-                if (this->flv_meta_data && this->is_audio_cfg_read && this->is_video_cfg_read && !this->video_sample_queue.empty()) {
-                    this->start_position = this->video_sample_queue.front().timestamp;
+                if (this->flv_meta_data && this->is_audio_cfg_read && this->is_video_cfg_read) {
                     tce.set();
                     return;
                 }
@@ -397,7 +393,8 @@ std::map<std::string, std::string> flv_player::get_video_info()
         info["Duration"] = std::to_string(duration->get_value() * 10000000);
     }
 
-    if (!this->keyframes.empty()) {
+    this->can_seek = this->stream_proxy->can_seek() && !this->keyframes.empty();
+    if (this->can_seek) {
         info["CanSeek"] = std::string("True");
     }
     else {
@@ -425,6 +422,7 @@ void flv_player::deliver_samples()
             this->audio_sample_queue.pop_front();
             auto tce = this->audio_sample_tce_queue.front();
             this->audio_sample_tce_queue.pop_front();
+            sample.timestamp = this->adjust_sample_timestamp(sample.timestamp);
             tce.set(sample);
             brk = false;
         }
@@ -433,6 +431,8 @@ void flv_player::deliver_samples()
             this->video_sample_queue.pop_front();
             auto tce = this->video_sample_tce_queue.front();
             this->video_sample_tce_queue.pop_front();
+            sample.timestamp = this->adjust_sample_timestamp(sample.timestamp);
+            sample.dts = this->adjust_sample_timestamp(sample.dts);
             tce.set(sample);
             brk = false;
             this->position = sample.timestamp;
@@ -623,6 +623,10 @@ bool flv_player::on_audio_sample(audio_sample&& sample)
     if (!this->is_audio_cfg_read) {
         return false;
     }
+    if (!this->first_sample_timestamp_has_value) {
+        this->first_sample_timestamp_has_value = true;
+        this->first_sample_timestamp = sample.timestamp;
+    }
     this->audio_sample_queue.emplace_back(std::move(sample));
     return true;
 }
@@ -631,6 +635,10 @@ bool flv_player::on_video_sample(video_sample&& sample)
 {
     if (!this->is_video_cfg_read) {
         return false;
+    }
+    if (!this->first_sample_timestamp_has_value) {
+        this->first_sample_timestamp_has_value = true;
+        this->first_sample_timestamp = sample.timestamp;
     }
     this->video_sample_queue.emplace_back(std::move(sample));
     return true;
@@ -691,6 +699,17 @@ std::string flv_player::uint8_to_hex_string(const std::uint8_t* data, size_t siz
         }
     }
     return result;
+}
+
+std::int64_t flv_player::adjust_sample_timestamp(std::int64_t timestamp)
+{
+    if (this->can_seek) {
+        return timestamp;
+    }
+    if (timestamp > this->first_sample_timestamp) {
+        return timestamp - this->first_sample_timestamp;
+    }
+    return 0;
 }
 
 } // namespace dawn_player

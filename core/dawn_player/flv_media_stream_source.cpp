@@ -74,10 +74,9 @@ IAsyncOperation<FlvMediaStreamSource^>^ FlvMediaStreamSource::create_from_read_s
     auto tsk_service = std::make_shared<default_task_service>();
     tsk_service->post_task([tsk_service, stream_proxy, tce]() {
         auto player = std::make_shared<flv_player>(tsk_service, stream_proxy);
-        bool stream_can_seek = stream_proxy->can_seek();
         player->open()
-            .then([tsk_service, player, tce, stream_can_seek](task<std::map<std::string, std::string>> tsk) {
-            tsk_service->post_task([player, tce, tsk, stream_can_seek]() {
+            .then([tsk_service, player, tce](task<std::map<std::string, std::string>> tsk) {
+            tsk_service->post_task([player, tce, tsk]() {
                 std::map<std::string, std::string> info;
                 try {
                     info = tsk.get();
@@ -106,7 +105,7 @@ IAsyncOperation<FlvMediaStreamSource^>^ FlvMediaStreamSource::create_from_read_s
                 auto vsd = ref new VideoStreamDescriptor(vep);
                 auto mss = ref new MediaStreamSource(asd);
                 mss->AddStreamDescriptor(vsd);
-                mss->CanSeek = stream_can_seek && info["CanSeek"] == "True";
+                mss->CanSeek = info["CanSeek"] == "True";
                 // Set BufferTime to 0 to improve seek experience in Debug mode
                 mss->BufferTime = TimeSpan{ 0 };
                 auto iter_duration = info.find("Duration");
@@ -127,40 +126,34 @@ IAsyncOperation<FlvMediaStreamSource^>^ FlvMediaStreamSource::create_from_read_s
 void FlvMediaStreamSource::on_starting(MediaStreamSource^ sender, MediaStreamSourceStartingEventArgs^ args)
 {
     auto request = args->Request;
+    auto start_position = request->StartPosition;
+    if (start_position == nullptr) {
+        return;
+    }
     auto deferral = request->GetDeferral();
     auto tsk_service = this->tsk_service;
     auto wp_player = std::weak_ptr<flv_player>(this->player);
-    tsk_service->post_task([tsk_service, wp_player, request, deferral]() {
-        auto start_position = request->StartPosition;
-        if (start_position == nullptr) {
+    tsk_service->post_task([tsk_service, wp_player, request, deferral, start_position]() {
+        create_async([tsk_service, wp_player, start_position, request, deferral]() {
             auto player = wp_player.lock();
-            if (player) {
-                request->SetActualStartPosition(TimeSpan{ player->get_start_position() });
-                deferral->Complete();
+            if (!player) {
+                return task_from_result();
             }
-        }
-        else {
-            create_async([tsk_service, wp_player, start_position, request, deferral]() {
-                auto player = wp_player.lock();
-                if (!player) {
-                    return task_from_result();
-                }
-                return player->seek(start_position->Value.Duration)
-                .then([tsk_service, request, deferral](task<std::int64_t> tsk) {
-                    tsk_service->post_task([tsk, request, deferral]() {
-                        std::int64_t seek_to_time = 0;
-                        try {
-                            seek_to_time = tsk.get();
-                        }
-                        catch (const task_canceled&) {
-                            return;
-                        }
-                        request->SetActualStartPosition(TimeSpan{ seek_to_time });
-                        deferral->Complete();
-                    });
+            return player->seek(start_position->Value.Duration)
+            .then([tsk_service, request, deferral](task<std::int64_t> tsk) {
+                tsk_service->post_task([tsk, request, deferral]() {
+                    std::int64_t seek_to_time = 0;
+                    try {
+                        seek_to_time = tsk.get();
+                    }
+                    catch (const task_canceled&) {
+                        return;
+                    }
+                    request->SetActualStartPosition(TimeSpan{ seek_to_time });
+                    deferral->Complete();
                 });
             });
-        }
+        });
     });
 }
 

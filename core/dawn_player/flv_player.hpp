@@ -65,13 +65,15 @@ class flv_player : public std::enable_shared_from_this<flv_player> {
     bool is_error_ocurred;
     bool is_sample_reading;
     std::int64_t last_seek_to_time;
-    std::int64_t start_position;
+
+    bool first_sample_timestamp_has_value;
+    std::int64_t first_sample_timestamp;
+    bool can_seek;
 
 public:
     explicit flv_player(const std::shared_ptr<task_service>& task_service, const std::shared_ptr<read_stream_proxy>& stream_proxy);
     virtual ~flv_player();
     task<std::map<std::string, std::string>> open();
-    std::int64_t get_start_position() const;
     task<audio_sample> get_audio_sample();
     task<video_sample> get_video_sample();
     task<std::int64_t> seek(std::int64_t seek_to_time);
@@ -101,6 +103,7 @@ private:
     void register_callback_functions(bool sample_only);
     void unregister_callback_functions();
     std::string uint8_to_hex_string(const std::uint8_t* data, size_t size, bool uppercase = true) const;
+    std::int64_t adjust_sample_timestamp(std::int64_t);
 };
 
 } // namespace dawn_player
