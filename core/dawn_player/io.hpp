@@ -36,6 +36,17 @@ private:
     IRandomAccessStream^ target;
 };
 
+class input_read_stream_proxy : public read_stream_proxy {
+public:
+    input_read_stream_proxy(IInputStream^ stream);
+    virtual ~input_read_stream_proxy();
+    virtual bool can_seek() const;
+    virtual task<std::uint32_t> read(std::uint8_t* buf, std::uint32_t size);
+    virtual void seek(std::uint64_t pos);
+private:
+    IInputStream^ target;
+};
+
 } // namespace io
 } // namespace dawn_player
 

@@ -11,6 +11,7 @@
 #include <memory>
 
 #include "flv_player.hpp"
+#include "io.hpp"
 #include "task_service.hpp"
 
 using namespace Windows::Foundation;
@@ -18,6 +19,7 @@ using namespace Windows::Media::Core;
 using namespace Windows::Storage::Streams;
 
 using namespace dawn_player;
+using namespace dawn_player::io;
 
 namespace DawnPlayer {
 
@@ -30,6 +32,7 @@ private:
     FlvMediaStreamSource();
     void init(const std::shared_ptr<flv_player>& player, MediaStreamSource^ mss);
 public:
+    static IAsyncOperation<FlvMediaStreamSource^>^ CreateFromInputStreamAsync(IInputStream^ inputStream);
     static IAsyncOperation<FlvMediaStreamSource^>^ CreateFromRandomAccessStreamAsync(IRandomAccessStream^ randomAccessStream);
     property MediaStreamSource^ Source
     {
@@ -37,6 +40,7 @@ public:
     }
     virtual ~FlvMediaStreamSource();
 private:
+    static IAsyncOperation<FlvMediaStreamSource^>^ create_from_read_stream_proxy_async(const std::shared_ptr<read_stream_proxy>& stream_proxy);
     void on_starting(MediaStreamSource^ sender, MediaStreamSourceStartingEventArgs^ args);
     void on_sample_requested(MediaStreamSource^ sender, MediaStreamSourceSampleRequestedEventArgs^ args);
     Windows::Foundation::EventRegistrationToken starting_event_token;

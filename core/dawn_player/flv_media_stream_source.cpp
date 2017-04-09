@@ -12,11 +12,9 @@
 #include "error.hpp"
 #include "flv_media_stream_source.hpp"
 #include "flv_player.hpp"
-#include "io.hpp"
 
 using namespace concurrency;
 using namespace dawn_player;
-using namespace dawn_player::io;
 using namespace Windows::Media::MediaProperties;
 
 namespace DawnPlayer {
@@ -34,17 +32,52 @@ void FlvMediaStreamSource::init(const std::shared_ptr<flv_player>& player, Media
     sample_requested_event_token = this->mss->SampleRequested += ref new TypedEventHandler<MediaStreamSource^, MediaStreamSourceSampleRequestedEventArgs^>(this, &FlvMediaStreamSource::on_sample_requested);
 }
 
+IAsyncOperation<FlvMediaStreamSource^>^ FlvMediaStreamSource::CreateFromInputStreamAsync(IInputStream^ inputStream)
+{
+    auto stream_proxy = std::make_shared<input_read_stream_proxy>(inputStream);
+    return create_from_read_stream_proxy_async(stream_proxy);
+}
+
 IAsyncOperation<FlvMediaStreamSource^>^ FlvMediaStreamSource::CreateFromRandomAccessStreamAsync(IRandomAccessStream^ randomAccessStream)
 {
     auto stream_proxy = std::make_shared<ramdon_access_read_stream_proxy>(randomAccessStream);
+    return create_from_read_stream_proxy_async(stream_proxy);
+}
+
+MediaStreamSource^ FlvMediaStreamSource::Source::get()
+{
+    return this->mss;
+}
+
+FlvMediaStreamSource::~FlvMediaStreamSource()
+{
+    if (this->player) {
+        auto player = this->player;
+        this->player = nullptr;
+        this->tsk_service->post_task([player]() {
+            create_async([player]() {
+                return player->close();
+            });
+        });
+    }
+    if (this->mss) {
+        this->mss->Starting -= this->starting_event_token;
+        this->mss->SampleRequested -= this->sample_requested_event_token;
+        this->mss = nullptr;
+    }
+}
+
+IAsyncOperation<FlvMediaStreamSource^>^ FlvMediaStreamSource::create_from_read_stream_proxy_async(const std::shared_ptr<read_stream_proxy>& stream_proxy)
+{
     auto tce = task_completion_event<FlvMediaStreamSource^>();
     auto result_task = task<FlvMediaStreamSource^>(tce);
     auto tsk_service = std::make_shared<default_task_service>();
     tsk_service->post_task([tsk_service, stream_proxy, tce]() {
         auto player = std::make_shared<flv_player>(tsk_service, stream_proxy);
+        bool stream_can_seek = stream_proxy->can_seek();
         player->open()
-        .then([tsk_service, player, tce](task<std::map<std::string, std::string>> tsk) {
-            tsk_service->post_task([player, tce, tsk]() {
+            .then([tsk_service, player, tce, stream_can_seek](task<std::map<std::string, std::string>> tsk) {
+            tsk_service->post_task([player, tce, tsk, stream_can_seek]() {
                 std::map<std::string, std::string> info;
                 try {
                     info = tsk.get();
@@ -69,7 +102,7 @@ IAsyncOperation<FlvMediaStreamSource^>^ FlvMediaStreamSource::CreateFromRandomAc
                 auto vsd = ref new VideoStreamDescriptor(vep);
                 auto mss = ref new MediaStreamSource(asd);
                 mss->AddStreamDescriptor(vsd);
-                mss->CanSeek = info["CanSeek"] == "True";
+                mss->CanSeek = stream_can_seek && info["CanSeek"] == "True";
                 // Set BufferTime to 0 to improve seek experience in Debug mode
                 mss->BufferTime = TimeSpan{ 0 };
                 auto iter_duration = info.find("Duration");
@@ -85,29 +118,6 @@ IAsyncOperation<FlvMediaStreamSource^>^ FlvMediaStreamSource::CreateFromRandomAc
     return create_async([result_task]() {
         return result_task;
     });
-}
-
-MediaStreamSource^ FlvMediaStreamSource::Source::get()
-{
-    return this->mss;
-}
-
-FlvMediaStreamSource::~FlvMediaStreamSource()
-{
-    if (this->player) {
-        auto player = this->player;
-        this->player = nullptr;
-        this->tsk_service->post_task([player]() {
-            create_async([player]() {
-                return player->close();
-            });
-        });
-    }
-    if (this->mss) {
-        this->mss->Starting -= this->starting_event_token;
-        this->mss->SampleRequested -= this->sample_requested_event_token;
-        this->mss = nullptr;
-    }
 }
 
 void FlvMediaStreamSource::on_starting(MediaStreamSource^ sender, MediaStreamSourceStartingEventArgs^ args)
