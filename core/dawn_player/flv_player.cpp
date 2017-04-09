@@ -242,6 +242,10 @@ task<void> flv_player::parse_meta_data()
                     tce.set_exception(open_error("Bad FLV data.", open_error_code::parse_error));
                     return;
                 }
+                else {
+                    std::memmove(this->read_buffer.data(), this->read_buffer.data() + bytes_consumed, this->read_buffer.size() - bytes_consumed);
+                    this->read_buffer.resize(this->read_buffer.size() - bytes_consumed);
+                }
                 if (this->flv_meta_data && this->is_audio_cfg_read && this->is_video_cfg_read && !this->video_sample_queue.empty()) {
                     this->start_position = this->video_sample_queue.front().timestamp;
                     tce.set();
