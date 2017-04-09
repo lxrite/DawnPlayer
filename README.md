@@ -1,40 +1,33 @@
 ## DawnPlayer
-A FLV playback library for Windows Phone Silverlight & Windows Runtime.
+A FLV playback library for Windows Phone 8.1, Windows 8.1 UAP and Windows 10 UWP.
 
 ### Features
 * No third-party dependencies
-* Support both Windows Phone Silverlight & Windows Runtime
+* HTTP FLV (live) stream and local file playback
+* Support Windows Phone 8.1, Windows 8.1 UAP and Windows 10 UWP
 
 ### Requirements
-#### Windows Phone Silverlight
-* Microsoft Visual Studio 2012
-* Windows Phone 8.0 SDK
-
-#### Windows Runtime
-* Microsoft Visual studio 2013
-* Windows (Phone) 8.1 SDK
+* Microsoft Visual Studio 2015
 
 ### Usage
 
-Asuming we have a `MediaElement` control named `mediaElement`, and there is a FLV file at `Assets\test.flv`.
-
-#### Windows Phone Silverlight
-``` csharp
-var applicationFolder = Windows.ApplicationModel.Package.Current.InstalledLocation;
-var storageFile = await applicationFolder.GetFileAsync("Assets\\test.flv");
-var randomAccessStream = await storageFile.OpenReadAsync();
-mediaElement.SetSource(FlvMediaStreamSource.Wrap(randomAccessStream));
-mediaElement.Play();
+XAML
+``` xml
+<MediaElement x:Name="mediaElement" AutoPlay="True"/>
 ```
 
-#### Windows Runtime
+C#
 ``` csharp
-var applicationFolder = Windows.ApplicationModel.Package.Current.InstalledLocation;
-var storageFile = await applicationFolder.GetFileAsync("Assets\\test.flv");
-var randomAccessStream = await storageFile.OpenReadAsync();
-fmss = await flv_media_stream_source.create_async(randomAccessStream);
-mediaElement.SetMediaStreamSource(fmss.unwrap());
-mediaElement.Play();
-```
+// Local file playback
+StorageFile file = ...;
+fileStream = await file.OpenAsync(Windows.Storage.FileAccessMode.Read);
+flvMediaStreamSource = await FlvMediaStreamSource.CreateFromRandomAccessStreamAsync(fileStream);
+mediaElement.SetMediaStreamSource(flvMediaStreamSource.Source);
 
-For HTTP or other streams, just implement the `IRandomAccessStream` interface around it. Here is a simple [http_random_access_stream](https://github.com/lxrite/DawnPlayer/blob/master/core/dawn_player/http_random_access_stream.hpp) for Windows Runtime.
+// HTTP FLV playback
+Uri uri = ...;
+var httpClient = new HttpClient();
+httpStream = await httpClient.GetInputStreamAsync(uri);
+flvMediaStreamSource = await FlvMediaStreamSource.CreateFromInputStreamAsync(httpStream);
+mediaElement.SetMediaStreamSource(flvMediaStreamSource.Source);
+```
