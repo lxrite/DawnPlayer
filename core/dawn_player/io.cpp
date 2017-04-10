@@ -52,7 +52,7 @@ task<std::uint32_t> ramdon_access_read_stream_proxy::read(std::uint8_t* buf, std
     }
     catch (Platform::ObjectDisposedException^)
     {
-        throw std::runtime_error("stream object disposed");
+        tce.set_exception(std::runtime_error("stream object disposed"));
     }
     return result_task;
 }
@@ -107,7 +107,7 @@ task<std::uint32_t> input_read_stream_proxy::read(std::uint8_t* buf, std::uint32
     }
     catch (Platform::ObjectDisposedException^)
     {
-        throw std::runtime_error("stream object disposed");
+        tce.set_exception(std::runtime_error("stream object disposed"));
     }
     return result_task;
 }

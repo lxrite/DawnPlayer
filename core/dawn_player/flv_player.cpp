@@ -133,30 +133,24 @@ task<std::uint32_t> flv_player::read_some_data()
     auto result_task = task<std::uint32_t>(tce);
     auto self(this->shared_from_this());
     create_async([this, self, tce]() {
-        try {
-            return this->stream_proxy->read(this->stream_proxy_read_buffer.data(), this->stream_proxy_read_buffer.size())
-            .then([this, self, tce](task<std::uint32_t> tsk) {
-                this->tsk_service->post_task([this, self, tce, tsk]() {
-                    std::uint32_t size = 0;
-                    try {
-                        size = tsk.get();
-                    }
-                    catch (...) {
-                        tce.set_exception(std::current_exception());
-                        return;
-                    }
-                    if (size != 0) {
-                        this->read_buffer.reserve(this->read_buffer.size() + size);
-                        std::copy(this->stream_proxy_read_buffer.begin(), this->stream_proxy_read_buffer.begin() + size, std::back_inserter(this->read_buffer));
-                    }
-                    tce.set(size);
-                });
+        return this->stream_proxy->read(this->stream_proxy_read_buffer.data(), this->stream_proxy_read_buffer.size())
+        .then([this, self, tce](task<std::uint32_t> tsk) {
+            this->tsk_service->post_task([this, self, tce, tsk]() {
+                std::uint32_t size = 0;
+                try {
+                    size = tsk.get();
+                }
+                catch (...) {
+                    tce.set_exception(std::current_exception());
+                    return;
+                }
+                if (size != 0) {
+                    this->read_buffer.reserve(this->read_buffer.size() + size);
+                    std::copy(this->stream_proxy_read_buffer.begin(), this->stream_proxy_read_buffer.begin() + size, std::back_inserter(this->read_buffer));
+                }
+                tce.set(size);
             });
-        }
-        catch (Platform::ObjectDisposedException^) {
-            tce.set_exception(std::runtime_error("video file stream disposed"));
-            return task_from_result();
-        }
+        });
     });
     return result_task;
 }
@@ -538,7 +532,7 @@ void flv_player::read_more_sample()
                 try {
                     size = tsk.get();
                 }
-                catch (const std::exception&) {
+                catch (...) {
                     this->is_error_ocurred = true;
                 }
                 if (!this->is_error_ocurred) {
