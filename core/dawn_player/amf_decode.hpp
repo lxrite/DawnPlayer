@@ -236,6 +236,9 @@ std::pair<amf_ecma_array, RandomAccessIterator> decode_amf_ecma_array_and_return
         std::tie(key, iter) = impl::decode_amf_string_without_marker_and_return_iterator(iter, end);
         std::shared_ptr<amf_base> value_ptr;
         std::tie(value_ptr, iter) = decode_amf_and_return_iterator(iter, end);
+        if (value_ptr->get_type() == amf_type::object_end) {
+            break;
+        }
         ecma_array.push_back(std::make_pair(std::move(key), value_ptr));
     }
     return std::make_pair(std::move(ecma_array), iter);
