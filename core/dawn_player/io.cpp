@@ -7,7 +7,12 @@
 
 #include <stdexcept>
 
+#include <robuffer.h>
+#include <wrl.h>
+
 #include "io.hpp"
+
+using namespace Microsoft::WRL;
 
 namespace dawn_player {
 namespace io {
@@ -43,9 +48,12 @@ task<std::uint32_t> ramdon_access_read_stream_proxy::read(std::uint8_t* buf, std
                 return;
             }
             std::uint32_t size = buffer->Length;
-            auto data_reader = DataReader::FromBuffer(buffer);
-            for (std::uint32_t i = 0; i < size; ++i) {
-                buf[i] = data_reader->ReadByte();
+            if (size != 0) {
+                ComPtr<IBufferByteAccess> buffer_byte_access;
+                reinterpret_cast<IInspectable*>(buffer)->QueryInterface(IID_PPV_ARGS(&buffer_byte_access));
+                byte* raw_buffer = nullptr;
+                buffer_byte_access->Buffer(&raw_buffer);
+                std::memcpy(buf, raw_buffer, size);
             }
             tce.set(size);
         });
@@ -98,9 +106,12 @@ task<std::uint32_t> input_read_stream_proxy::read(std::uint8_t* buf, std::uint32
                 return;
             }
             std::uint32_t size = buffer->Length;
-            auto data_reader = DataReader::FromBuffer(buffer);
-            for (std::uint32_t i = 0; i < size; ++i) {
-                buf[i] = data_reader->ReadByte();
+            if (size != 0) {
+                ComPtr<IBufferByteAccess> buffer_byte_access;
+                reinterpret_cast<IInspectable*>(buffer)->QueryInterface(IID_PPV_ARGS(&buffer_byte_access));
+                byte* raw_buffer = nullptr;
+                buffer_byte_access->Buffer(&raw_buffer);
+                std::memcpy(buf, raw_buffer, size);
             }
             tce.set(size);
         });
