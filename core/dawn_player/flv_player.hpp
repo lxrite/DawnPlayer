@@ -47,8 +47,6 @@ class flv_player : public std::enable_shared_from_this<flv_player> {
     std::string video_codec_private_data;
     std::vector<std::uint8_t> sps;
     std::vector<std::uint8_t> pps;
-
-    std::int64_t position;
     bool is_closed;
 
     std::deque<audio_sample> audio_sample_queue;

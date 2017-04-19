@@ -55,9 +55,7 @@ FlvMediaStreamSource::~FlvMediaStreamSource()
         auto player = this->player;
         this->player = nullptr;
         this->tsk_service->post_task([player]() {
-            create_async([player]() {
-                return player->close();
-            });
+            player->close();
         });
     }
     if (this->mss) {
@@ -134,12 +132,9 @@ void FlvMediaStreamSource::on_starting(MediaStreamSource^ sender, MediaStreamSou
     auto tsk_service = this->tsk_service;
     auto wp_player = std::weak_ptr<flv_player>(this->player);
     tsk_service->post_task([tsk_service, wp_player, request, deferral, start_position]() {
-        create_async([tsk_service, wp_player, start_position, request, deferral]() {
-            auto player = wp_player.lock();
-            if (!player) {
-                return task_from_result();
-            }
-            return player->seek(start_position->Value.Duration)
+        auto player = wp_player.lock();
+        if (player) {
+            player->seek(start_position->Value.Duration)
             .then([tsk_service, request, deferral](task<std::int64_t> tsk) {
                 tsk_service->post_task([tsk, request, deferral]() {
                     std::int64_t seek_to_time = 0;
@@ -153,7 +148,7 @@ void FlvMediaStreamSource::on_starting(MediaStreamSource^ sender, MediaStreamSou
                     deferral->Complete();
                 });
             });
-        });
+        }
     });
 }
 
@@ -165,13 +160,10 @@ void FlvMediaStreamSource::on_sample_requested(MediaStreamSource^ sender, MediaS
     auto wp_player = std::weak_ptr<flv_player>(this->player);
     tsk_service->post_task([tsk_service, wp_player, sender, request, deferral]() {
         if (request->StreamDescriptor->GetType()->FullName == AudioStreamDescriptor::typeid->FullName) {
-            create_async([tsk_service, wp_player, sender, request, deferral]() {
-                auto player = wp_player.lock();
-                if (!player) {
-                    return task_from_result();
-                }
-                return player->get_audio_sample()
-                    .then([tsk_service, sender, request, deferral](task<audio_sample> tsk) {
+            auto player = wp_player.lock();
+            if (player) {
+                player->get_audio_sample()
+                .then([tsk_service, sender, request, deferral](task<audio_sample> tsk) {
                     tsk_service->post_task([sender, request, deferral, tsk]() {
                         try {
                             audio_sample sample = tsk.get();
@@ -196,67 +188,63 @@ void FlvMediaStreamSource::on_sample_requested(MediaStreamSource^ sender, MediaS
                         deferral->Complete();
                     });
                 });
-            }); 
+            }
         }
         else if (request->StreamDescriptor->GetType()->FullName == VideoStreamDescriptor::typeid->FullName) {
-            create_async([tsk_service, wp_player, sender, request, deferral]() {
-                auto player = wp_player.lock();
-                if (!player) {
-                    return task_from_result();
-                }
-                return player->get_video_sample()
+            auto player = wp_player.lock();
+            if (player) {
+                player->get_video_sample()
                 .then([tsk_service, wp_player, sender, request, deferral](task<video_sample> tsk) {
                     tsk_service->post_task([wp_player, sender, request, deferral, tsk]() {
                         auto player = wp_player.lock();
-                        if (!player) {
-                            return;
-                        }
-                        try {
-                            video_sample sample = tsk.get();
-                            auto data_writer = ref new DataWriter();
-                            if (sample.is_key_frame) {
-                                const auto& sps = player->get_sps();
-                                if (!sps.empty()) {
-                                    data_writer->WriteByte(0);
-                                    data_writer->WriteByte(0);
-                                    data_writer->WriteByte(1);
-                                    for (auto byte : sps) {
-                                        data_writer->WriteByte(byte);
+                        if (player) {
+                            try {
+                                video_sample sample = tsk.get();
+                                auto data_writer = ref new DataWriter();
+                                if (sample.is_key_frame) {
+                                    const auto& sps = player->get_sps();
+                                    if (!sps.empty()) {
+                                        data_writer->WriteByte(0);
+                                        data_writer->WriteByte(0);
+                                        data_writer->WriteByte(1);
+                                        for (auto byte : sps) {
+                                            data_writer->WriteByte(byte);
+                                        }
+                                    }
+                                    const auto& pps = player->get_pps();
+                                    if (!pps.empty()) {
+                                        data_writer->WriteByte(0);
+                                        data_writer->WriteByte(0);
+                                        data_writer->WriteByte(1);
+                                        for (auto byte : pps) {
+                                            data_writer->WriteByte(byte);
+                                        }
                                     }
                                 }
-                                const auto& pps = player->get_pps();
-                                if (!pps.empty()) {
-                                    data_writer->WriteByte(0);
-                                    data_writer->WriteByte(0);
-                                    data_writer->WriteByte(1);
-                                    for (auto byte : pps) {
-                                        data_writer->WriteByte(byte);
-                                    }
+                                for (auto byte : sample.data) {
+                                    data_writer->WriteByte(byte);
+                                }
+                                auto stream_sample = MediaStreamSample::CreateFromBuffer(data_writer->DetachBuffer(), TimeSpan{ sample.timestamp });
+                                stream_sample->DecodeTimestamp = TimeSpan{ sample.dts };
+                                stream_sample->KeyFrame = sample.is_key_frame;
+                                request->Sample = stream_sample;
+                            }
+                            catch (const get_sample_error& gse) {
+                                if (gse.code() == get_sample_error_code::end_of_stream) {
+                                    request->Sample = nullptr;
+                                }
+                                else {
+                                    sender->NotifyError(MediaStreamSourceErrorStatus::Other);
                                 }
                             }
-                            for (auto byte : sample.data) {
-                                data_writer->WriteByte(byte);
+                            catch (const task_canceled&) {
+                                return;
                             }
-                            auto stream_sample = MediaStreamSample::CreateFromBuffer(data_writer->DetachBuffer(), TimeSpan{ sample.timestamp });
-                            stream_sample->DecodeTimestamp = TimeSpan{ sample.dts };
-                            stream_sample->KeyFrame = sample.is_key_frame;
-                            request->Sample = stream_sample;
+                            deferral->Complete();
                         }
-                        catch (const get_sample_error& gse) {
-                            if (gse.code() == get_sample_error_code::end_of_stream) {
-                                request->Sample = nullptr;
-                            }
-                            else {
-                                sender->NotifyError(MediaStreamSourceErrorStatus::Other);
-                            }
-                        }
-                        catch (const task_canceled&) {
-                            return;
-                        }
-                        deferral->Complete();
                     });
                 });
-            });
+            }
         }
     });
 }
