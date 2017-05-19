@@ -38,7 +38,7 @@ task<std::uint32_t> ramdon_access_read_stream_proxy::read(std::uint8_t* buf, std
     auto result_task = task<std::uint32_t>(tce);
     try {
         create_task(this->target->ReadAsync(ref new Buffer(size), size, InputStreamOptions::Partial))
-            .then([tce, buf](task<IBuffer^> tsk) mutable {
+            .then([tce, buf](task<IBuffer^> tsk) {
             IBuffer^ buffer = nullptr;
             try {
                 buffer = tsk.get();
@@ -58,9 +58,8 @@ task<std::uint32_t> ramdon_access_read_stream_proxy::read(std::uint8_t* buf, std
             tce.set(size);
         });
     }
-    catch (Platform::ObjectDisposedException^)
-    {
-        tce.set_exception(std::runtime_error("stream object disposed"));
+    catch (...) {
+        tce.set_exception(std::current_exception());
     }
     return result_task;
 }
@@ -70,8 +69,8 @@ void ramdon_access_read_stream_proxy::seek(std::uint64_t pos)
     try {
         this->target->Seek(pos);
     }
-    catch (Platform::ObjectDisposedException^) {
-        throw std::runtime_error("stream object disposed");
+    catch (...) {
+        throw std::runtime_error("failed to seek");
     }
 }
 
@@ -96,7 +95,7 @@ task<std::uint32_t> input_read_stream_proxy::read(std::uint8_t* buf, std::uint32
     auto result_task = task<std::uint32_t>(tce);
     try {
         create_task(this->target->ReadAsync(ref new Buffer(size), size, InputStreamOptions::Partial))
-            .then([tce, buf](task<IBuffer^> tsk) mutable {
+            .then([tce, buf](task<IBuffer^> tsk) {
             IBuffer^ buffer = nullptr;
             try {
                 buffer = tsk.get();
@@ -116,9 +115,8 @@ task<std::uint32_t> input_read_stream_proxy::read(std::uint8_t* buf, std::uint32
             tce.set(size);
         });
     }
-    catch (Platform::ObjectDisposedException^)
-    {
-        tce.set_exception(std::runtime_error("stream object disposed"));
+    catch (...) {
+        tce.set_exception(std::current_exception());
     }
     return result_task;
 }
