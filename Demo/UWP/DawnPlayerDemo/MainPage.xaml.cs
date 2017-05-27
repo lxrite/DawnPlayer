@@ -4,6 +4,8 @@ using Windows.Storage.Streams;
 using Windows.UI.Popups;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
+using Windows.Web.Http;
+using Windows.Web.Http.Filters;
 using DawnPlayer;
 
 namespace DawnPlayerDemo
@@ -94,6 +96,96 @@ namespace DawnPlayerDemo
             try
             {
                 fmss = await FlvMediaStreamSource.CreateFromRandomAccessStreamAsync(fileStream);
+            }
+            catch (Exception)
+            {
+                fileStream.Dispose();
+                fileStream = null;
+            }
+            if (taskID != this.playTaskID)
+            {
+                if (fmss != null)
+                {
+                    fmss.Dispose();
+                    fmss = null;
+                }
+                if (fileStream != null)
+                {
+                    fileStream.Dispose();
+                    fileStream = null;
+                }
+                return;
+            }
+            if (fmss == null)
+            {
+                this.ShowMessage("Failed to open media");
+                return;
+            }
+            this.videoStream = fileStream;
+            this.flvMediaStreamSource = fmss;
+            mediaElement.SetMediaStreamSource(flvMediaStreamSource.Source);
+        }
+
+        private async void OpenUrl(object sender, RoutedEventArgs e)
+        {
+            var url = this.UrlInputBox.Text.Trim();
+            if (url.Length == 0)
+            {
+                return;
+            }
+            Uri uri = null;
+            try
+            {
+                uri = new Uri(url);
+            }
+            catch (Exception)
+            {
+                this.ShowMessage("Bad url");
+                return;
+            }
+            this.mediaElement.Source = null;
+            if (this.flvMediaStreamSource != null)
+            {
+                this.flvMediaStreamSource.Dispose();
+                this.flvMediaStreamSource = null;
+            }
+            if (this.videoStream != null)
+            {
+                this.videoStream.Dispose();
+                this.videoStream = null;
+            }
+            var taskID = ++this.playTaskID;
+            this.Splitter.IsPaneOpen = false;
+            IInputStream fileStream = null;
+            try
+            {
+                var hpf = new HttpBaseProtocolFilter();
+                hpf.CacheControl.ReadBehavior = HttpCacheReadBehavior.MostRecent;
+                hpf.CacheControl.WriteBehavior = HttpCacheWriteBehavior.NoCache;
+                var httpClient = new HttpClient(hpf);
+                fileStream = await httpClient.GetInputStreamAsync(uri);
+            }
+            catch (Exception)
+            {
+            }
+            if (taskID != this.playTaskID)
+            {
+                if (fileStream != null)
+                {
+                    fileStream.Dispose();
+                    fileStream = null;
+                }
+                return;
+            }
+            if (fileStream == null)
+            {
+                this.ShowMessage("Failed to open media");
+                return;
+            }
+            FlvMediaStreamSource fmss = null;
+            try
+            {
+                fmss = await FlvMediaStreamSource.CreateFromInputStreamAsync(fileStream);
             }
             catch (Exception)
             {

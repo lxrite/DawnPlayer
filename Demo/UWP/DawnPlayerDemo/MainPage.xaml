@@ -14,6 +14,9 @@
                     <StackPanel Orientation="Vertical">
                         <TextBlock Text="Open Local File"/>
                         <AppBarButton ToolTipService.ToolTip="Open Local File" Icon="OpenFile" Click="OpenLocalFile"/>
+                        <TextBlock Text="Open HTTP"/>
+                        <TextBox x:Name="UrlInputBox" />
+                        <AppBarButton Icon="Play" Click="OpenUrl"/>
                     </StackPanel>
                 </StackPanel>
             </SplitView.Pane>
