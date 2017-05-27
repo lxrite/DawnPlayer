@@ -1,6 +1,8 @@
 ## DawnPlayer
 A FLV playback library for Windows Phone 8.1, Windows 8.1 UAP and Windows 10 UWP.
 
+![](https://raw.githubusercontent.com/lxrite/DawnPlayer/master/Demo/demo1.gif)
+
 ### Features
 * No third-party dependencies
 * HTTP FLV (live) stream and local file playback
