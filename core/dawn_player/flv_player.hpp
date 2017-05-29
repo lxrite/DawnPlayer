@@ -12,20 +12,17 @@
 #include <cstdint>
 #include <deque>
 #include <functional>
+#include <future>
 #include <map>
 #include <memory>
 #include <queue>
 #include <vector>
-
-#include <ppltasks.h>
 
 #include "amf_types.hpp"
 #include "flv_parser.hpp"
 #include "io.hpp"
 #include "task_service.hpp"
 
-using namespace Windows::Storage::Streams;
-using namespace concurrency;
 using namespace dawn_player::amf;
 using namespace dawn_player::io;
 using namespace dawn_player::sample;
@@ -36,7 +33,6 @@ namespace dawn_player {
 class flv_player : public std::enable_shared_from_this<flv_player> {
     std::shared_ptr<task_service> tsk_service;
     std::shared_ptr<read_stream_proxy> stream_proxy;
-    std::array<std::uint8_t, 65536> stream_proxy_read_buffer;
     std::vector<std::uint8_t> read_buffer;
     flv_parser parser;
 
@@ -53,16 +49,11 @@ class flv_player : public std::enable_shared_from_this<flv_player> {
     std::deque<video_sample> video_sample_queue;
     std::map<double, std::uint64_t, std::greater<double>> keyframes;
 
-    std::queue<task_completion_event<std::int64_t>> get_start_position_tce_queue;
-    std::deque<task_completion_event<audio_sample>> audio_sample_tce_queue;
-    std::deque<task_completion_event<video_sample>> video_sample_tce_queue;
-    std::queue<task_completion_event<std::int64_t>> seek_tce_queue;
-    std::queue<task_completion_event<void>> close_tce_queue;
+    std::queue<std::shared_ptr<std::promise<void>>> read_sample_promise_queue;
 
     bool is_end_of_stream;
     bool is_error_ocurred;
     bool is_sample_reading;
-    std::int64_t last_seek_to_time;
 
     bool first_sample_timestamp_has_value;
     std::int64_t first_sample_timestamp;
@@ -71,26 +62,23 @@ class flv_player : public std::enable_shared_from_this<flv_player> {
 public:
     explicit flv_player(const std::shared_ptr<task_service>& task_service, const std::shared_ptr<read_stream_proxy>& stream_proxy);
     virtual ~flv_player();
-    task<std::map<std::string, std::string>> open();
-    task<audio_sample> get_audio_sample();
-    task<video_sample> get_video_sample();
-    task<std::int64_t> seek(std::int64_t seek_to_time);
-    task<void> close();
+    std::future<std::map<std::string, std::string>> open();
+    std::future<audio_sample> get_audio_sample();
+    std::future<video_sample> get_video_sample();
+    std::future<std::int64_t> seek(std::int64_t seek_to_time);
+    std::future<void> close();
     const std::vector<std::uint8_t>& get_sps() const;
     const std::vector<std::uint8_t>& get_pps() const;
     const std::shared_ptr<task_service> get_task_service() const;
 
 private:
-    task<std::uint32_t> read_some_data();
-    task<void> parse_header();
-    task<void> parse_meta_data();
+    std::future<std::uint32_t> read_some_data();
+    std::future<void> parse_header();
+    std::future<void> parse_meta_data();
     std::map<std::string, std::string> get_video_info();
 
 private:
-    void deliver_samples();
-    void handle_seek();
-    void handle_close();
-    void read_more_sample();
+    std::future<void> read_more_sample();
 
 private:
     bool on_script_tag(std::shared_ptr<amf_base> name, std::shared_ptr<amf_base> value);

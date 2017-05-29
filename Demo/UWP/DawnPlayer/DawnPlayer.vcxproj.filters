@@ -15,6 +15,7 @@
     <ClCompile Include="..\..\..\core\dawn_player\flv_player.cpp" />
     <ClCompile Include="..\..\..\core\dawn_player\samples.cpp" />
     <ClCompile Include="..\..\..\core\dawn_player\io.cpp" />
+    <ClCompile Include="..\..\..\core\dawn_player\task_service.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\..\core\dawn_player\amf_decode.hpp" />

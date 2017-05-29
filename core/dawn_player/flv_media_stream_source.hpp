@@ -25,7 +25,6 @@ namespace DawnPlayer {
 
 public ref class FlvMediaStreamSource sealed {
 private:
-    std::shared_ptr<task_service> tsk_service;
     std::shared_ptr<flv_player> player;
     MediaStreamSource^ mss;
 private:
@@ -43,6 +42,8 @@ private:
     static IAsyncOperation<FlvMediaStreamSource^>^ create_from_read_stream_proxy_async(const std::shared_ptr<read_stream_proxy>& stream_proxy);
     void on_starting(MediaStreamSource^ sender, MediaStreamSourceStartingEventArgs^ args);
     void on_sample_requested(MediaStreamSource^ sender, MediaStreamSourceSampleRequestedEventArgs^ args);
+    std::future<void> handle_starting(MediaStreamSource^ sender, MediaStreamSourceStartingEventArgs^ args);
+    std::future<void> handle_sample_requested(MediaStreamSource^ sender, MediaStreamSourceSampleRequestedEventArgs^ args);
     Windows::Foundation::EventRegistrationToken starting_event_token;
     Windows::Foundation::EventRegistrationToken sample_requested_event_token;
 };

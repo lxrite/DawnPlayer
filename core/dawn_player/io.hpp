@@ -9,10 +9,8 @@
 #define DAWN_PLAYER_IO_HPP
 
 #include <cstdint>
+#include <future>
 
-#include <ppltasks.h>
-
-using namespace concurrency;
 using namespace Windows::Storage::Streams;
 
 namespace dawn_player {
@@ -21,7 +19,7 @@ namespace io {
 struct read_stream_proxy {
     virtual ~read_stream_proxy() {}
     virtual bool can_seek() const = 0;
-    virtual task<std::uint32_t> read(std::uint8_t* buf, std::uint32_t size) = 0;
+    virtual std::future<std::uint32_t> read(std::uint8_t* buf, std::uint32_t size) = 0;
     virtual void seek(std::uint64_t pos) = 0;
 };
 
@@ -30,7 +28,7 @@ public:
     ramdon_access_read_stream_proxy(IRandomAccessStream^ stream);
     virtual ~ramdon_access_read_stream_proxy();
     virtual bool can_seek() const;
-    virtual task<std::uint32_t> read(std::uint8_t* buf, std::uint32_t size);
+    virtual std::future<std::uint32_t> read(std::uint8_t* buf, std::uint32_t size);
     virtual void seek(std::uint64_t pos);
 private:
     IRandomAccessStream^ target;
@@ -41,7 +39,7 @@ public:
     input_read_stream_proxy(IInputStream^ stream);
     virtual ~input_read_stream_proxy();
     virtual bool can_seek() const;
-    virtual task<std::uint32_t> read(std::uint8_t* buf, std::uint32_t size);
+    virtual std::future<std::uint32_t> read(std::uint8_t* buf, std::uint32_t size);
     virtual void seek(std::uint64_t pos);
 private:
     IInputStream^ target;

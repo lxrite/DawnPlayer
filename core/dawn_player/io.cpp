@@ -7,11 +7,13 @@
 
 #include <stdexcept>
 
+#include <ppltasks.h>
 #include <robuffer.h>
 #include <wrl.h>
 
 #include "io.hpp"
 
+using namespace concurrency;
 using namespace Microsoft::WRL;
 
 namespace dawn_player {
@@ -32,19 +34,18 @@ bool ramdon_access_read_stream_proxy::can_seek() const
     return true;
 }
 
-task<std::uint32_t> ramdon_access_read_stream_proxy::read(std::uint8_t* buf, std::uint32_t size)
+std::future<std::uint32_t> ramdon_access_read_stream_proxy::read(std::uint8_t* buf, std::uint32_t size)
 {
-    auto tce = task_completion_event<std::uint32_t>();
-    auto result_task = task<std::uint32_t>(tce);
+    auto p = std::make_shared<std::promise<std::uint32_t>>();
     try {
         create_task(this->target->ReadAsync(ref new Buffer(size), size, InputStreamOptions::Partial))
-            .then([tce, buf](task<IBuffer^> tsk) {
+            .then([p, buf](task<IBuffer^> tsk) {
             IBuffer^ buffer = nullptr;
             try {
                 buffer = tsk.get();
             }
             catch (...) {
-                tce.set_exception(std::current_exception());
+                p->set_exception(std::current_exception());
                 return;
             }
             std::uint32_t size = buffer->Length;
@@ -55,13 +56,13 @@ task<std::uint32_t> ramdon_access_read_stream_proxy::read(std::uint8_t* buf, std
                 buffer_byte_access->Buffer(&raw_buffer);
                 std::memcpy(buf, raw_buffer, size);
             }
-            tce.set(size);
+            p->set_value(size);
         });
     }
     catch (...) {
-        tce.set_exception(std::current_exception());
+        p->set_exception(std::current_exception());
     }
-    return result_task;
+    return p->get_future();
 }
 
 void ramdon_access_read_stream_proxy::seek(std::uint64_t pos)
@@ -89,19 +90,18 @@ bool input_read_stream_proxy::can_seek() const
     return false;
 }
 
-task<std::uint32_t> input_read_stream_proxy::read(std::uint8_t* buf, std::uint32_t size)
+std::future<std::uint32_t> input_read_stream_proxy::read(std::uint8_t* buf, std::uint32_t size)
 {
-    auto tce = task_completion_event<std::uint32_t>();
-    auto result_task = task<std::uint32_t>(tce);
+    auto p = std::make_shared<std::promise<std::uint32_t>>();
     try {
         create_task(this->target->ReadAsync(ref new Buffer(size), size, InputStreamOptions::Partial))
-            .then([tce, buf](task<IBuffer^> tsk) {
+            .then([p, buf](task<IBuffer^> tsk) {
             IBuffer^ buffer = nullptr;
             try {
                 buffer = tsk.get();
             }
             catch (...) {
-                tce.set_exception(std::current_exception());
+                p->set_exception(std::current_exception());
                 return;
             }
             std::uint32_t size = buffer->Length;
@@ -112,13 +112,13 @@ task<std::uint32_t> input_read_stream_proxy::read(std::uint8_t* buf, std::uint32
                 buffer_byte_access->Buffer(&raw_buffer);
                 std::memcpy(buf, raw_buffer, size);
             }
-            tce.set(size);
+            p->set_value(size);
         });
     }
     catch (...) {
-        tce.set_exception(std::current_exception());
+        p->set_exception(std::current_exception());
     }
-    return result_task;
+    return p->get_future();
 }
 
 void input_read_stream_proxy::seek(std::uint64_t pos)

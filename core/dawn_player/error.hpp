@@ -29,6 +29,10 @@ enum class get_sample_error_code {
     other,
 };
 
+enum class seek_error_code {
+    cancel,
+};
+
 class open_error : public std::exception {
     std::string what_msg;
     open_error_code error_code;
@@ -45,6 +49,15 @@ public:
     get_sample_error(const std::string& what_arg, get_sample_error_code ec);
     virtual const char* what() const;
     get_sample_error_code code() const;
+};
+
+class seek_error : public std::exception {
+    std::string what_msg;
+    seek_error_code error_code;
+public:
+    seek_error(const std::string& what_arg, seek_error_code ec);
+    virtual const char* what() const;
+    seek_error_code code() const;
 };
 
 } // namespace dawn_player

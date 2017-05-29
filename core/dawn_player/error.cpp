@@ -35,4 +35,18 @@ get_sample_error_code get_sample_error::code() const {
     return this->error_code;
 }
 
+seek_error::seek_error(const std::string& what_arg, seek_error_code ec)
+    : what_msg(what_arg), error_code(ec)
+{}
+
+const char* seek_error::what() const
+{
+    return this->what_msg.c_str();
+}
+
+seek_error_code seek_error::code() const
+{
+    return this->error_code;
+}
+
 } // namespace dawn_player

@@ -11,8 +11,6 @@
 
 namespace dawn_player {
 
-static const size_t BUFFER_QUEUE_DEFICIENT_SIZE = 50;
-
 flv_player::flv_player(const std::shared_ptr<task_service>& tsk_service, const std::shared_ptr<read_stream_proxy>& stream_proxy)
     : tsk_service(tsk_service)
     , stream_proxy(stream_proxy)
@@ -21,7 +19,6 @@ flv_player::flv_player(const std::shared_ptr<task_service>& tsk_service, const s
     , is_end_of_stream(false)
     , is_error_ocurred(false)
     , is_sample_reading(false)
-    , last_seek_to_time(0)
     , is_closed(false)
     , first_sample_timestamp_has_value(false)
     , first_sample_timestamp(0)
@@ -33,78 +30,123 @@ flv_player::~flv_player()
 {
 }
 
-task<std::map<std::string, std::string>> flv_player::open()
+std::future<std::map<std::string, std::string>> flv_player::open()
 {
-    auto tce = task_completion_event<std::map<std::string, std::string>>();
-    auto result_task = task<std::map<std::string, std::string>>(tce);
-    auto self(this->shared_from_this());
-    this->parse_header()
-    .then([this, self, tce](task<void> tsk) {
-        this->tsk_service->post_task([this, self, tce, tsk]() {
-            try {
-                tsk.get();
-            }
-            catch (...) {
-                tce.set_exception(std::current_exception());
-                return;
-            }
-            this->parse_meta_data()
-            .then([this, self, tce](task<void> tsk) {
-                try {
-                    tsk.get();
-                }
-                catch (...) {
-                    tce.set_exception(std::current_exception());
-                    return;
-                }
-                try {
-                    tce.set(this->get_video_info());
-                }
-                catch (...) {
-                    tce.set_exception(std::current_exception());
-                }
-            });
-        });
-    });
-    return result_task;
+    co_await switch_to_task_service(this->tsk_service.get());
+    co_await this->parse_header();
+    co_await switch_to_task_service(this->tsk_service.get());
+    co_await this->parse_meta_data();
+    co_await switch_to_task_service(this->tsk_service.get());
+    return this->get_video_info();
 }
 
-task<audio_sample> flv_player::get_audio_sample()
+std::future<audio_sample> flv_player::get_audio_sample()
 {
-    auto tce = task_completion_event<audio_sample>();
-    auto result_task = task<audio_sample>(tce);
-    this->audio_sample_tce_queue.push_back(tce);
-    this->deliver_samples();
-    return result_task;
+    co_await switch_to_task_service(this->tsk_service.get());
+    for (;;) {
+        if (this->is_closed) {
+            throw get_sample_error("operation canceled", get_sample_error_code::cancel);
+        }
+        if (!this->audio_sample_queue.empty()) {
+            break;
+        }
+        if (this->is_end_of_stream) {
+            throw get_sample_error("end of stream", get_sample_error_code::end_of_stream);
+        }
+        if (this->is_error_ocurred) {
+            throw get_sample_error("errror ocurred", get_sample_error_code::other);
+        }
+        if (this->is_sample_reading) {
+            auto p = std::make_shared<std::promise<void>>();
+            this->read_sample_promise_queue.push(p);
+            co_await p->get_future();
+        }
+        else {
+            co_await this->read_more_sample();
+        }
+        co_await switch_to_task_service(this->tsk_service.get());
+    }
+    auto sample = std::move(this->audio_sample_queue.front());
+    this->audio_sample_queue.pop_front();
+    return sample;
 }
 
-task<video_sample> flv_player::get_video_sample()
+std::future<video_sample> flv_player::get_video_sample()
 {
-    auto tce = task_completion_event<video_sample>();
-    auto result_task = task<video_sample>(tce);
-    this->video_sample_tce_queue.push_back(tce);
-    this->deliver_samples();
-    return result_task;
+    co_await switch_to_task_service(this->tsk_service.get());
+    for (;;) {
+        if (this->is_closed) {
+            throw get_sample_error("operation canceled", get_sample_error_code::cancel);
+        }
+        if (!this->video_sample_queue.empty()) {
+            break;
+        }
+        if (this->is_end_of_stream) {
+            throw get_sample_error("end of stream", get_sample_error_code::end_of_stream);
+        }
+        if (this->is_error_ocurred) {
+            throw get_sample_error("errror ocurred", get_sample_error_code::other);
+        }
+        if (this->is_sample_reading) {
+            auto p = std::make_shared<std::promise<void>>();
+            this->read_sample_promise_queue.push(p);
+            co_await p->get_future();
+        }
+        else {
+            co_await this->read_more_sample();
+        }
+        co_await switch_to_task_service(this->tsk_service.get());
+    }
+    auto sample = std::move(this->video_sample_queue.front());
+    this->video_sample_queue.pop_front();
+    return sample;
 }
 
-task<std::int64_t> flv_player::seek(std::int64_t seek_to_time)
+std::future<std::int64_t> flv_player::seek(std::int64_t seek_to_time)
 {
-    auto tce = task_completion_event<std::int64_t>();
-    auto result_task = task<std::int64_t>(tce);
-    this->seek_tce_queue.push(tce);
-    this->last_seek_to_time = seek_to_time;
-    this->handle_seek();
-    return result_task;
+    co_await switch_to_task_service(this->tsk_service.get());
+    for (;;) {
+        if (this->is_closed) {
+            throw seek_error("operation canceled", seek_error_code::cancel);
+        }
+        if (!this->is_sample_reading) {
+            break;
+        }
+        auto p = std::make_shared<std::promise<void>>();
+        this->read_sample_promise_queue.push(p);
+        co_await p->get_future();
+        co_await switch_to_task_service(this->tsk_service.get());
+    }
+    double seek_to_time_sec = static_cast<double>(seek_to_time) / 10000000;
+    auto iter = this->keyframes.lower_bound(seek_to_time_sec);
+    std::uint64_t position = 0;
+    double time = 0.00;
+    if (iter == this->keyframes.end()) {
+        position = keyframes.rbegin()->second;
+        time = keyframes.rbegin()->first;
+    }
+    else {
+        position = iter->second;
+        time = iter->first;
+    }
+    this->read_buffer.clear();
+    this->audio_sample_queue.clear();
+    this->video_sample_queue.clear();
+    this->is_error_ocurred = false;
+    this->is_end_of_stream = false;
+    try {
+        this->stream_proxy->seek(position);
+    }
+    catch (...) {
+        this->is_error_ocurred = true;
+    }
+    return static_cast<std::int64_t>(time * 10000000);
 }
 
-task<void> flv_player::close()
+std::future<void> flv_player::close()
 {
-    auto tce = task_completion_event<void>();
-    auto result_task = task<void>(tce);
+    co_await switch_to_task_service(this->tsk_service.get());
     this->is_closed = true;
-    this->close_tce_queue.push(tce);
-    this->handle_close();
-    return result_task;
 }
 
 const std::vector<std::uint8_t>& flv_player::get_sps() const
@@ -122,132 +164,71 @@ const std::shared_ptr<task_service> flv_player::get_task_service() const
     return this->tsk_service;
 }
 
-task<std::uint32_t> flv_player::read_some_data()
+std::future<std::uint32_t> flv_player::read_some_data()
 {
-    auto tce = task_completion_event<std::uint32_t>();
-    auto result_task = task<std::uint32_t>(tce);
-    auto self(this->shared_from_this());
-    this->stream_proxy->read(this->stream_proxy_read_buffer.data(), this->stream_proxy_read_buffer.size())
-    .then([this, self, tce](task<std::uint32_t> tsk) {
-        this->tsk_service->post_task([this, self, tce, tsk]() {
-            std::uint32_t size = 0;
-            try {
-                size = tsk.get();
-            }
-            catch (...) {
-                tce.set_exception(std::current_exception());
-                return;
-            }
-            if (size != 0) {
-                this->read_buffer.reserve(this->read_buffer.size() + size);
-                std::copy(this->stream_proxy_read_buffer.begin(), this->stream_proxy_read_buffer.begin() + size, std::back_inserter(this->read_buffer));
-            }
-            tce.set(size);
-        });
-    });
-    return result_task;
+    co_await switch_to_task_service(this->tsk_service.get());
+    const size_t buf_size = 65536;
+    std::uint8_t buf[buf_size];
+    auto size = co_await this->stream_proxy->read(buf, buf_size);
+    co_await switch_to_task_service(tsk_service.get());
+    if (size != 0) {
+        this->read_buffer.reserve(this->read_buffer.size() + size);
+        std::copy(buf, buf + size, std::back_inserter(this->read_buffer));
+    }
+    return size;
 }
 
-task<void> flv_player::parse_header()
+std::future<void> flv_player::parse_header()
 {
-    auto tce = task_completion_event<void>();
-    auto result_task = task<void>(tce);
-    auto self(this->shared_from_this());
-    this->read_some_data()
-    .then([this, self, tce](task<std::uint32_t> tsk) {
-        this->tsk_service->post_task([this, self, tce, tsk]() {
-            std::uint32_t size = 0;
-            try {
-                size = tsk.get();
-            }
-            catch (...) {
-                tce.set_exception(open_error("Read data error.", open_error_code::io_error));
-                return;
-            }
-            if (size == 0) {
-                tce.set_exception(open_error("Failed to parse header, end of stream.", open_error_code::parse_error));
-                return;
-            }
-            if (this->read_buffer.size() < this->parser.first_tag_offset()) {
-                this->parse_header()
-                .then([this, self, tce](task<void> tsk) {
-                    this->tsk_service->post_task([this, self, tce, tsk]() {
-                        try {
-                            tsk.get();
-                            tce.set();
-                        }
-                        catch (...) {
-                            tce.set_exception(std::current_exception());
-                        }
-                    });
-                });
-                return;
-            }
-            size_t bytes_consumed = 0;
-            auto parse_res = this->parser.parse_flv_header(this->read_buffer.data(), this->read_buffer.size(), bytes_consumed);
-            if (parse_res != parse_result::ok) {
-                tce.set_exception(open_error("Bad FLV header.", open_error_code::parse_error));
-                return;
-            }
-            std::memmove(this->read_buffer.data(), this->read_buffer.data() + this->parser.first_tag_offset(), this->read_buffer.size() - this->parser.first_tag_offset());
-            this->read_buffer.resize(this->read_buffer.size() - this->parser.first_tag_offset());
-            tce.set();
-        });
-    });
-    return result_task;
+    while (this->read_buffer.size() < this->parser.first_tag_offset()) {
+        std::uint32_t size = 0;
+        try {
+            size = co_await this->read_some_data();
+        }
+        catch (...) {
+            throw open_error("Read data error.", open_error_code::io_error);
+        }
+        if (size == 0) {
+            throw open_error("Failed to parse header, end of stream.", open_error_code::parse_error);
+        }
+        co_await switch_to_task_service(this->tsk_service.get());
+    }
+    size_t bytes_consumed = 0;
+    auto parse_res = this->parser.parse_flv_header(this->read_buffer.data(), this->read_buffer.size(), bytes_consumed);
+    if (parse_res != parse_result::ok) {
+        throw open_error("Bad FLV header.", open_error_code::parse_error);
+    }
+    std::memmove(this->read_buffer.data(), this->read_buffer.data() + this->parser.first_tag_offset(), this->read_buffer.size() - this->parser.first_tag_offset());
+    this->read_buffer.resize(this->read_buffer.size() - this->parser.first_tag_offset());
 }
 
-task<void> flv_player::parse_meta_data()
+std::future<void> flv_player::parse_meta_data()
 {
-    auto tce = task_completion_event<void>();
-    auto result_task = task<void>(tce);
-    auto self(this->shared_from_this());
-    this->read_some_data()
-    .then([this, self, tce](task<std::uint32_t> tsk) {
-        this->tsk_service->post_task([this, self, tce, tsk]() {
-            std::uint32_t size = 0;
-            try {
-                size = tsk.get();
-            }
-            catch (...) {
-                tce.set_exception(open_error("Read data error.", open_error_code::io_error));
-                return;
-            }
-            size_t bytes_consumed = 0;
-            this->register_callback_functions(false);
-            auto result = this->parser.parse_flv_tags(this->read_buffer.data(), this->read_buffer.size(), bytes_consumed);
-            this->unregister_callback_functions();
-            if (result != parse_result::ok) {
-                tce.set_exception(open_error("Bad FLV data.", open_error_code::parse_error));
-                return;
-            }
-            else {
-                std::memmove(this->read_buffer.data(), this->read_buffer.data() + bytes_consumed, this->read_buffer.size() - bytes_consumed);
-                this->read_buffer.resize(this->read_buffer.size() - bytes_consumed);
-            }
-            if (this->flv_meta_data && this->is_audio_cfg_read && this->is_video_cfg_read) {
-                tce.set();
-                return;
-            }
-            if (size == 0) {
-                tce.set_exception(open_error("Failed to parse header, end of stream.", open_error_code::parse_error));
-                return;
-            }
-            this->parse_meta_data()
-            .then([this, self, tce](task<void> tsk) {
-                this->tsk_service->post_task([this, self, tce, tsk]() {
-                    try {
-                        tsk.get();
-                        tce.set();
-                    }
-                    catch (...) {
-                        tce.set_exception(std::current_exception());
-                    }
-                });
-            });
-        });
-    });
-    return result_task;
+    for (;;) {
+        std::uint32_t size = 0;
+        try {
+            size = co_await this->read_some_data();
+        }
+        catch (...) {
+            throw open_error("Read data error.", open_error_code::io_error);
+        }
+        co_await switch_to_task_service(this->tsk_service.get());
+        size_t bytes_consumed = 0;
+        this->register_callback_functions(false);
+        auto parse_res = this->parser.parse_flv_tags(this->read_buffer.data(), this->read_buffer.size(), bytes_consumed);
+        this->unregister_callback_functions();
+        if (parse_res != parse_result::ok) {
+            throw open_error("Bad FLV data.", open_error_code::parse_error);
+        }
+        std::memmove(this->read_buffer.data(), this->read_buffer.data() + bytes_consumed, this->read_buffer.size() - bytes_consumed);
+        this->read_buffer.resize(this->read_buffer.size() - bytes_consumed);
+        if (this->flv_meta_data && this->is_audio_cfg_read && this->is_video_cfg_read) {
+            break;
+        }
+        if (size == 0) {
+            throw open_error("Failed to parse header, end of stream.", open_error_code::parse_error);
+        }
+    }
 }
 
 std::map<std::string, std::string> flv_player::get_video_info()
@@ -392,158 +373,47 @@ std::map<std::string, std::string> flv_player::get_video_info()
     return info;
 }
 
-void flv_player::deliver_samples()
+std::future<void> flv_player::read_more_sample()
 {
-    while (true) {
-        bool brk = true;
-        if (!this->audio_sample_tce_queue.empty() && !this->audio_sample_queue.empty()) {
-            auto sample = std::move(this->audio_sample_queue.front());
-            this->audio_sample_queue.pop_front();
-            auto tce = this->audio_sample_tce_queue.front();
-            this->audio_sample_tce_queue.pop_front();
-            sample.timestamp = this->adjust_sample_timestamp(sample.timestamp);
-            tce.set(sample);
-            brk = false;
-        }
-        if (!this->video_sample_tce_queue.empty() && !this->video_sample_queue.empty()) {
-            auto sample = std::move(this->video_sample_queue.front());
-            this->video_sample_queue.pop_front();
-            auto tce = this->video_sample_tce_queue.front();
-            this->video_sample_tce_queue.pop_front();
-            sample.timestamp = this->adjust_sample_timestamp(sample.timestamp);
-            sample.dts = this->adjust_sample_timestamp(sample.dts);
-            tce.set(sample);
-            brk = false;
-        }
-        if (brk) {
-            break;
-        }
-    }
-    if (this->is_error_ocurred) {
-        if (!this->audio_sample_tce_queue.empty()) {
-            auto tce = this->audio_sample_tce_queue.front();
-            tce.set_exception(get_sample_error("errror ocurred", get_sample_error_code::other));
-        }
-        else if (!this->video_sample_tce_queue.empty()) {
-            auto tce = this->video_sample_tce_queue.front();
-            tce.set_exception(get_sample_error("errror ocurred", get_sample_error_code::other));
-        }
-        this->audio_sample_tce_queue.clear();
-        this->video_sample_tce_queue.clear();
-        return;
-    }
-    if (this->is_end_of_stream) {
-        if (!this->audio_sample_tce_queue.empty()) {
-            auto tce = this->audio_sample_tce_queue.front();
-            this->audio_sample_tce_queue.clear();
-            tce.set_exception(get_sample_error("end of stream", get_sample_error_code::end_of_stream));
-        }
-        if (!this->video_sample_tce_queue.empty()) {
-            auto tce = this->video_sample_tce_queue.front();
-            this->video_sample_tce_queue.clear();
-            tce.set_exception(get_sample_error("end of stream", get_sample_error_code::end_of_stream));
-        }
-        return;
-    }
-    if ((this->audio_sample_queue.size() < BUFFER_QUEUE_DEFICIENT_SIZE || this->video_sample_queue.size() < BUFFER_QUEUE_DEFICIENT_SIZE) && !this->is_sample_reading) {
-        if (!this->is_closed && this->audio_sample_queue.size() < 3 * BUFFER_QUEUE_DEFICIENT_SIZE && this->video_sample_queue.size() < 3 * BUFFER_QUEUE_DEFICIENT_SIZE) {
-            this->read_more_sample();
-        }
-    }
-}
-
-void flv_player::handle_seek()
-{
-    if (this->seek_tce_queue.empty()) {
-        return;
-    }
-    if (this->is_sample_reading) {
-        return;
-    }
-    double seek_to_time_sec = static_cast<double>(this->last_seek_to_time) / 10000000;
-    auto iter = this->keyframes.lower_bound(seek_to_time_sec);
-    std::uint64_t position = 0;
-    double time = 0.00;
-    if (iter == this->keyframes.end()) {
-        position = keyframes.rbegin()->second;
-        time = keyframes.rbegin()->first;
-    }
-    else {
-        position = iter->second;
-        time = iter->first;
-    }
-    this->read_buffer.clear();
-    this->audio_sample_queue.clear();
-    this->video_sample_queue.clear();
-    this->is_error_ocurred = false;
-    this->is_end_of_stream = false;
-    try {
-        this->stream_proxy->seek(position);
-    }
-    catch (...) {
-        this->is_error_ocurred = true;
-    }
-    auto seek_to_time = static_cast<std::int64_t>(time * 10000000);
-    while (!this->seek_tce_queue.empty()) {
-        auto tce = this->seek_tce_queue.front();
-        this->seek_tce_queue.pop();
-        tce.set(seek_to_time);
-    }
-}
-
-void flv_player::handle_close()
-{
-    if (this->is_closed && !this->is_sample_reading)
-    {
-        while (!this->close_tce_queue.empty()) {
-            auto tce = this->close_tce_queue.front();
-            this->close_tce_queue.pop();
-            tce.set();
-        }
-    }
-}
-
-void flv_player::read_more_sample()
-{
+    co_await switch_to_task_service(this->tsk_service.get());
     assert(!this->is_sample_reading);
     this->is_sample_reading = true;
-    auto self(this->shared_from_this());
-    this->read_some_data()
-    .then([this, self](task<std::uint32_t> tsk) {
-        this->tsk_service->post_task([this, self, tsk]() {
-            std::uint32_t size = 0;
-            try {
-                size = tsk.get();
-            }
-            catch (...) {
+    bool err = false;
+    std::uint32_t size = 0;
+    try {
+        size = co_await this->read_some_data();
+    }
+    catch (...) {
+        err = true;
+    }
+    co_await switch_to_task_service(this->tsk_service.get());
+    if (err) {
+        this->is_error_ocurred = true;
+    }
+    else {
+        if (size == 0) {
+            this->is_end_of_stream = true;
+        }
+        else {
+            size_t bytes_consumed = 0;
+            this->register_callback_functions(true);
+            auto parse_res = this->parser.parse_flv_tags(this->read_buffer.data(), this->read_buffer.size(), bytes_consumed);
+            this->unregister_callback_functions();
+            if (parse_res != parse_result::ok) {
                 this->is_error_ocurred = true;
             }
-            if (!this->is_error_ocurred) {
-                if (size == 0) {
-                    this->is_end_of_stream = true;
-                }
-                size_t bytes_consumed = 0;
-                this->register_callback_functions(true);
-                auto parse_res = this->parser.parse_flv_tags(this->read_buffer.data(), this->read_buffer.size(), bytes_consumed);
-                this->unregister_callback_functions();
-                if (parse_res != parse_result::ok) {
-                    this->is_error_ocurred = true;
-                }
-                else {
-                    std::memmove(this->read_buffer.data(), this->read_buffer.data() + bytes_consumed, this->read_buffer.size() - bytes_consumed);
-                    this->read_buffer.resize(this->read_buffer.size() - bytes_consumed);
-                }
+            else {
+                std::memmove(this->read_buffer.data(), this->read_buffer.data() + bytes_consumed, this->read_buffer.size() - bytes_consumed);
+                this->read_buffer.resize(this->read_buffer.size() - bytes_consumed);
             }
-
-            this->is_sample_reading = false;
-            this->handle_close();
-            if (this->is_closed) {
-                return;
-            }
-            this->handle_seek();
-            this->deliver_samples();
-        });
-    });
+        }
+    }
+    this->is_sample_reading = false;
+    while (!this->read_sample_promise_queue.empty()) {
+        auto p = this->read_sample_promise_queue.front();
+        this->read_sample_promise_queue.pop();
+        p->set_value();
+    }
 }
 
 bool flv_player::on_script_tag(std::shared_ptr<amf_base> name, std::shared_ptr<amf_base> value)
