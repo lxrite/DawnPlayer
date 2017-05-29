@@ -38,9 +38,11 @@ default_task_service::default_task_service()
 : service_ctx(std::make_shared<impl::default_task_service_context>())
 {
     auto ctx = this->service_ctx;
-    std::thread([ctx]() {
+    auto td = std::thread([ctx]() {
         impl::task_thread_proc(ctx);
-    }).detach();
+    });
+    this->thread_id = td.get_id();
+    td.detach();
 }
 
 default_task_service::~default_task_service()
@@ -55,6 +57,11 @@ void default_task_service::post_task(std::function<void()>&& task)
         this->service_ctx->task_queue.push(std::move(task));
     }
     this->service_ctx->task_queue_cv.notify_one();
+}
+
+std::thread::id default_task_service::get_thread_id()
+{
+    return this->thread_id;
 }
 
 } // namespace dawn_player

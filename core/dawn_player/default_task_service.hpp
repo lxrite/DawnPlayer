@@ -25,15 +25,17 @@ struct default_task_service_context {
     std::condition_variable task_queue_cv;
 };
 
-}
+} // namespace impl
 
 class default_task_service : public task_service {
 public:
     default_task_service();
     virtual ~default_task_service();
     virtual void post_task(std::function<void()>&& task);
+    virtual std::thread::id get_thread_id();
 private:
     std::shared_ptr<impl::default_task_service_context> service_ctx;
+    std::thread::id thread_id;
 };
 
 } // namespace dawn_player

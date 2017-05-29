@@ -11,13 +11,33 @@
 
 namespace dawn_player {
 
-std::future<void> switch_to_task_service(task_service* tsk_service)
+namespace impl {
+
+switch_task_service_awaitor::switch_task_service_awaitor(task_service* service)
+    : tsk_service(service)
+{}
+
+bool switch_task_service_awaitor::await_ready()
 {
-    auto p = std::make_shared<std::promise<void>>();
-    tsk_service->post_task([p]() {
-        p->set_value();
+    return std::this_thread::get_id() == this->tsk_service->get_thread_id();
+}
+
+void switch_task_service_awaitor::await_resume()
+{
+}
+
+void switch_task_service_awaitor::await_suspend(std::experimental::coroutine_handle<> coro)
+{
+    this->tsk_service->post_task([coro]() {
+        coro.resume();
     });
-    return p->get_future();
+}
+
+} // namespace impl
+
+impl::switch_task_service_awaitor switch_to_task_service(task_service* tsk_service)
+{
+    return impl::switch_task_service_awaitor{ tsk_service };
 }
 
 } // namespace dawn_player
