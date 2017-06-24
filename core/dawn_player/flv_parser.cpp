@@ -178,7 +178,7 @@ parse_result flv_parser::parse_flv_tags(const std::uint8_t* data, size_t size, s
             //                0 = snd8Bit
             //                1 = snd16Bit
             auto sound_size_flag = (data[offset] & 0x02) >> 1;
-            std::uint16_t sound_size = 16;
+            std::uint16_t sound_size = sound_size_flag == 1 ? 16 : 8;
             // SoundType      UB[1]          Mono or stereo sound
             //                0 = sndMono    For Nellymoser: always 0
             //                1 = sndStereo  For AAC: always 1
