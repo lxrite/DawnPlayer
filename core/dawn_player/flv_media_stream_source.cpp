@@ -77,11 +77,18 @@ IAsyncOperation<FlvMediaStreamSource^>^ FlvMediaStreamSource::create_from_read_s
             throw ref new Platform::FailureException("Failed to open FLV file.");
         }
         std::string acpd = info["AudioCodecPrivateData"];
+        std::uint32_t audio_format_tag = std::stol(acpd.substr(0, 2), 0, 16) + std::stol(acpd.substr(2, 2), 0, 16) * 0x100;
         unsigned int channel_count = std::stol(acpd.substr(4, 2), 0, 16) + std::stol(acpd.substr(6, 2), 0, 16) * 0x100;
         unsigned int sample_rate = std::stol(acpd.substr(8, 2), 0, 16) + std::stol(acpd.substr(10, 2), 0, 16) * 0x100 +
             std::stol(acpd.substr(12, 2), 0, 16) * 0x10000 + std::stol(acpd.substr(14, 2), 0, 16) * 0x1000000;
         unsigned int bit_rate = sample_rate * (std::stol(acpd.substr(28, 2), 0, 16) + std::stol(acpd.substr(30, 2), 0, 16) * 0x100);
-        auto aep = AudioEncodingProperties::CreateAac(sample_rate, channel_count, bit_rate);
+        AudioEncodingProperties^ aep;
+        if (audio_format_tag == 0x0055) {
+            aep = AudioEncodingProperties::CreateMp3(sample_rate, channel_count, bit_rate);
+        }
+        else {
+            aep = AudioEncodingProperties::CreateAac(sample_rate, channel_count, bit_rate);
+        }
         auto asd = ref new AudioStreamDescriptor(aep);
         auto vep = VideoEncodingProperties::CreateH264();
         auto video_width = std::stoul(info["Width"]);
