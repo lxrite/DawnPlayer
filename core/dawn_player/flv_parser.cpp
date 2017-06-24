@@ -187,7 +187,84 @@ parse_result flv_parser::parse_flv_tags(const std::uint8_t* data, size_t size, s
             //                                          AACAUDIODATA
             //                                        else
             //                                          Sound data¡ªvaries by format
-            if (sound_format_flag == 0x0a) {
+            if (sound_format_flag == 0x02) {
+                // MP3
+                if (tag_data_offset + tag_data_size - offset < 4) {
+                    return parse_result::error;
+                }
+                if (this->on_audio_specific_config) {
+                    // Frame sync UB[11] (all bits set)
+                    // MPEG Audio version ID UB[2]
+                    // 00 = MPEG Version 2.5 (unofficial)
+                    // 01 = reserved
+                    // 10 = MPEG Version 2 (ISO / IEC 13818 - 3)
+                    // 11 = MPEG Version 1 (ISO / IEC 11172 - 3)
+                    auto audio_version_id = (data[offset + 1] & 0x18) >> 3;
+                    if (audio_version_id == 0x01) {
+                        return parse_result::error;
+                    }
+                    // Layer description UB[2]
+                    // Protection bit UB[1]
+                    // Bitrate index UB[4]
+                    // Sampling rate frequency index (values are in Hz) UB[2]
+                    // bits  MPEG1   MPEG2   MPEG2.5
+                    // 00    44100   22050   11025
+                    // 01    48000   24000   12000
+                    // 10    32000   16000   8000
+                    // 11    reserv. reserv. reserv.
+                    auto sampling_frequency_index = (data[offset + 2] & 0x0c) >> 2;
+                    std::uint32_t sampling_frequency;
+                    switch (sampling_frequency_index) {
+                    case 0x00:
+                        sampling_frequency = 11025;
+                        break;
+                    case 0x01:
+                        sampling_frequency = 12000;
+                        break;
+                    case 0x02:
+                        sampling_frequency = 8000;
+                        break;
+                    default:
+                        return parse_result::error;
+                    }
+                    if (audio_version_id == 0x02) {
+                        sampling_frequency *= 2;
+                    }
+                    else if (audio_version_id == 0x03) {
+                        sampling_frequency *= 4;
+                    }
+                    // Padding bit UB[1]
+                    // Private bit
+                    // Channel Mode UB[2]
+                    // 00 = Stereo
+                    // 01 = Joint stereo (Stereo)
+                    // 10 = Dual channel (2 mono channels)
+                    // 11 = Single channel (Mono)
+                    auto channel_mode = (data[offset + 3] & 0xc0) >> 6;
+                    audio_special_config asc;
+                    asc.format_tag = 0x0055; // MP3
+                    asc.channels = channel_mode == 0x03 ? 1 : 2;
+                    asc.sample_per_second = sampling_frequency;
+                    asc.bits_per_sample = sound_size;
+                    asc.block_align = asc.channels * asc.bits_per_sample / 8;
+                    asc.size = 0;
+                    asc.average_bytes_per_second = asc.sample_per_second * asc.channels * asc.bits_per_sample / asc.block_align;
+                    if (!this->on_audio_specific_config(asc)) {
+                        return parse_result::abort;
+                    }
+                }
+                if (this->on_audio_sample) {
+                    dawn_player::sample::audio_sample sample;
+                    sample.timestamp = static_cast<std::int64_t>(static_cast<std::uint32_t>(timestamp | (timestamp_extended << 24))) * 10000;
+                    sample.data.reserve(tag_data_offset + tag_data_size - offset);
+                    std::copy(&data[offset], &data[tag_data_offset + tag_data_size], std::back_inserter(sample.data));
+                    if (!this->on_audio_sample(std::move(sample))) {
+                        return parse_result::abort;
+                    }
+                }
+                offset = tag_data_offset + tag_data_size;
+            }
+            else if (sound_format_flag == 0x0a) {
                 // AAC
                 // AACAUDIODATA
                 // AACPacketType UI8    0: AAC sequence header
