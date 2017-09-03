@@ -37,7 +37,7 @@ std::future<std::map<std::string, std::string>> flv_player::open()
     co_await switch_to_task_service(this->tsk_service.get());
     co_await this->parse_meta_data();
     co_await switch_to_task_service(this->tsk_service.get());
-    return this->get_video_info();
+    co_return this->get_video_info();
 }
 
 std::future<audio_sample> flv_player::get_audio_sample()
@@ -68,7 +68,7 @@ std::future<audio_sample> flv_player::get_audio_sample()
     }
     auto sample = std::move(this->audio_sample_queue.front());
     this->audio_sample_queue.pop_front();
-    return sample;
+    co_return sample;
 }
 
 std::future<video_sample> flv_player::get_video_sample()
@@ -99,7 +99,7 @@ std::future<video_sample> flv_player::get_video_sample()
     }
     auto sample = std::move(this->video_sample_queue.front());
     this->video_sample_queue.pop_front();
-    return sample;
+    co_return sample;
 }
 
 std::future<std::int64_t> flv_player::seek(std::int64_t seek_to_time)
@@ -140,7 +140,7 @@ std::future<std::int64_t> flv_player::seek(std::int64_t seek_to_time)
     catch (...) {
         this->is_error_ocurred = true;
     }
-    return static_cast<std::int64_t>(time * 10000000);
+    co_return static_cast<std::int64_t>(time * 10000000);
 }
 
 std::future<void> flv_player::close()
@@ -175,7 +175,7 @@ std::future<std::uint32_t> flv_player::read_some_data()
         this->read_buffer.reserve(this->read_buffer.size() + size);
         std::copy(buf, buf + size, std::back_inserter(this->read_buffer));
     }
-    return size;
+    co_return size;
 }
 
 std::future<void> flv_player::parse_header()
