@@ -1,5 +1,7 @@
 ## DawnPlayer
-A FLV playback library for Windows 10 UWP.
+A FLV playback library for Windows 10+ UWP and WinUI 3 Apps.
+
+This library allows you to extend the functionality of `MediaPlayerElement` and `MediaElement` to support playing FLV video files.
 
 ![](https://raw.githubusercontent.com/lxrite/DawnPlayer/master/Demo/demo1.gif)
 
@@ -8,7 +10,7 @@ A FLV playback library for Windows 10 UWP.
 * HTTP FLV (live) stream and local file playback
 
 ### Requirements
-* Microsoft Visual Studio 2015
+* Microsoft Visual Studio 2022
 
 ### Usage
 

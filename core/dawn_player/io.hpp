@@ -11,7 +11,9 @@
 #include <cstdint>
 #include <future>
 
-using namespace Windows::Storage::Streams;
+#include <winrt/Windows.Storage.Streams.h>
+
+using namespace winrt::Windows::Storage::Streams;
 
 namespace dawn_player {
 namespace io {
@@ -25,24 +27,24 @@ struct read_stream_proxy {
 
 class ramdon_access_read_stream_proxy : public read_stream_proxy {
 public:
-    ramdon_access_read_stream_proxy(IRandomAccessStream^ stream);
+    ramdon_access_read_stream_proxy(IRandomAccessStream stream);
     virtual ~ramdon_access_read_stream_proxy();
     virtual bool can_seek() const;
     virtual std::future<std::uint32_t> read(std::uint8_t* buf, std::uint32_t size);
     virtual void seek(std::uint64_t pos);
 private:
-    IRandomAccessStream^ target;
+    IRandomAccessStream target;
 };
 
 class input_read_stream_proxy : public read_stream_proxy {
 public:
-    input_read_stream_proxy(IInputStream^ stream);
+    input_read_stream_proxy(IInputStream stream);
     virtual ~input_read_stream_proxy();
     virtual bool can_seek() const;
     virtual std::future<std::uint32_t> read(std::uint8_t* buf, std::uint32_t size);
     virtual void seek(std::uint64_t pos);
 private:
-    IInputStream^ target;
+    IInputStream target;
 };
 
 } // namespace io

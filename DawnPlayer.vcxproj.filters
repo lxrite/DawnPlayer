@@ -1,0 +1,89 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Resources">
+      <UniqueIdentifier>accd3aa8-1ba0-4223-9bbe-0c431709210b</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tga;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Generated Files">
+      <UniqueIdentifier>{926ab91d-31b4-48c3-b9a4-e681349f27f0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core">
+      <UniqueIdentifier>{8d866059-f029-44ad-a1a9-855ed250a7c8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="core\dawn_player">
+      <UniqueIdentifier>{b0afd685-09f5-4de1-999a-b4b3d5161601}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="pch.cpp" />
+    <ClCompile Include="$(GeneratedFilesDir)module.g.cpp" />
+    <ClCompile Include="core\dawn_player\amf_types.cpp">
+      <Filter>core\dawn_player</Filter>
+    </ClCompile>
+    <ClCompile Include="core\dawn_player\default_task_service.cpp">
+      <Filter>core\dawn_player</Filter>
+    </ClCompile>
+    <ClCompile Include="core\dawn_player\error.cpp">
+      <Filter>core\dawn_player</Filter>
+    </ClCompile>
+    <ClCompile Include="core\dawn_player\flv_parser.cpp">
+      <Filter>core\dawn_player</Filter>
+    </ClCompile>
+    <ClCompile Include="core\dawn_player\flv_player.cpp">
+      <Filter>core\dawn_player</Filter>
+    </ClCompile>
+    <ClCompile Include="core\dawn_player\io.cpp">
+      <Filter>core\dawn_player</Filter>
+    </ClCompile>
+    <ClCompile Include="core\dawn_player\samples.cpp">
+      <Filter>core\dawn_player</Filter>
+    </ClCompile>
+    <ClCompile Include="core\dawn_player\task_service.cpp">
+      <Filter>core\dawn_player</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="pch.h" />
+    <ClInclude Include="core\dawn_player\amf_decode.hpp">
+      <Filter>core\dawn_player</Filter>
+    </ClInclude>
+    <ClInclude Include="core\dawn_player\amf_types.hpp">
+      <Filter>core\dawn_player</Filter>
+    </ClInclude>
+    <ClInclude Include="core\dawn_player\default_task_service.hpp">
+      <Filter>core\dawn_player</Filter>
+    </ClInclude>
+    <ClInclude Include="core\dawn_player\error.hpp">
+      <Filter>core\dawn_player</Filter>
+    </ClInclude>
+    <ClInclude Include="core\dawn_player\flv_parser.hpp">
+      <Filter>core\dawn_player</Filter>
+    </ClInclude>
+    <ClInclude Include="core\dawn_player\flv_player.hpp">
+      <Filter>core\dawn_player</Filter>
+    </ClInclude>
+    <ClInclude Include="core\dawn_player\io.hpp">
+      <Filter>core\dawn_player</Filter>
+    </ClInclude>
+    <ClInclude Include="core\dawn_player\samples.hpp">
+      <Filter>core\dawn_player</Filter>
+    </ClInclude>
+    <ClInclude Include="core\dawn_player\task_service.hpp">
+      <Filter>core\dawn_player</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Midl Include="FlvMediaStreamSource.idl" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="DawnPlayer.def" />
+    <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="PropertySheet.props" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="readme.txt" />
+  </ItemGroup>
+</Project>

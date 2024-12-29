@@ -1,0 +1,10 @@
+namespace DawnPlayer
+{
+    [default_interface]
+    runtimeclass FlvMediaStreamSource: Windows.Foundation.IClosable
+    {
+        Windows.Media.Core.MediaStreamSource Source{ get; };
+        static Windows.Foundation.IAsyncOperation<FlvMediaStreamSource> CreateFromInputStreamAsync(Windows.Storage.Streams.IInputStream inputStream);
+        static Windows.Foundation.IAsyncOperation<FlvMediaStreamSource> CreateFromRandomAccessStreamAsync(Windows.Storage.Streams.IRandomAccessStream randomAccessStream);
+    }
+}

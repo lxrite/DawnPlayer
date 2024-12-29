@@ -1,7 +1,7 @@
 /*
  *    io.cpp:
  *
- *    Copyright (C) 2015-2017 Light Lin <blog.poxiao.me> All Rights Reserved.
+ *    Copyright (C) 2015-2024 Light Lin <blog.poxiao.me> All Rights Reserved.
  *
  */
 
@@ -9,17 +9,17 @@
 
 #include <ppltasks.h>
 #include <robuffer.h>
-#include <wrl.h>
+#include <winrt/Windows.Foundation.h>
 
 #include "io.hpp"
 
 using namespace concurrency;
-using namespace Microsoft::WRL;
+using namespace winrt::Windows::Foundation;
 
 namespace dawn_player {
 namespace io {
 
-ramdon_access_read_stream_proxy::ramdon_access_read_stream_proxy(IRandomAccessStream^ stream)
+ramdon_access_read_stream_proxy::ramdon_access_read_stream_proxy(IRandomAccessStream stream)
     : target(stream)
 {
 }
@@ -38,22 +38,19 @@ std::future<std::uint32_t> ramdon_access_read_stream_proxy::read(std::uint8_t* b
 {
     auto p = std::make_shared<std::promise<std::uint32_t>>();
     try {
-        create_task(this->target->ReadAsync(ref new Buffer(size), size, InputStreamOptions::Partial))
-            .then([p, buf](task<IBuffer^> tsk) {
-            IBuffer^ buffer = nullptr;
+        auto op = this->target.ReadAsync(Buffer(size), size, InputStreamOptions::Partial);
+        create_task([p, buf, op]() {
+            IBuffer buffer = nullptr;
             try {
-                buffer = tsk.get();
+                buffer = op.get();
             }
             catch (...) {
                 p->set_exception(std::current_exception());
                 return;
             }
-            std::uint32_t size = buffer->Length;
+            std::uint32_t size = buffer.Length();
             if (size != 0) {
-                ComPtr<IBufferByteAccess> buffer_byte_access;
-                reinterpret_cast<IInspectable*>(buffer)->QueryInterface(IID_PPV_ARGS(&buffer_byte_access));
-                byte* raw_buffer = nullptr;
-                buffer_byte_access->Buffer(&raw_buffer);
+                auto raw_buffer = buffer.data();
                 std::memcpy(buf, raw_buffer, size);
             }
             p->set_value(size);
@@ -68,14 +65,14 @@ std::future<std::uint32_t> ramdon_access_read_stream_proxy::read(std::uint8_t* b
 void ramdon_access_read_stream_proxy::seek(std::uint64_t pos)
 {
     try {
-        this->target->Seek(pos);
+        this->target.Seek(pos);
     }
     catch (...) {
         throw std::runtime_error("failed to seek");
     }
 }
 
-input_read_stream_proxy::input_read_stream_proxy(IInputStream^ stream)
+input_read_stream_proxy::input_read_stream_proxy(IInputStream stream)
     : target(stream)
 {
 }
@@ -94,22 +91,19 @@ std::future<std::uint32_t> input_read_stream_proxy::read(std::uint8_t* buf, std:
 {
     auto p = std::make_shared<std::promise<std::uint32_t>>();
     try {
-        create_task(this->target->ReadAsync(ref new Buffer(size), size, InputStreamOptions::Partial))
-            .then([p, buf](task<IBuffer^> tsk) {
-            IBuffer^ buffer = nullptr;
+        auto op = this->target.ReadAsync(Buffer(size), size, InputStreamOptions::Partial);
+        create_task([p, buf, op]() {
+            IBuffer buffer = nullptr;
             try {
-                buffer = tsk.get();
+                buffer = op.get();
             }
             catch (...) {
                 p->set_exception(std::current_exception());
                 return;
             }
-            std::uint32_t size = buffer->Length;
+            std::uint32_t size = buffer.Length();
             if (size != 0) {
-                ComPtr<IBufferByteAccess> buffer_byte_access;
-                reinterpret_cast<IInspectable*>(buffer)->QueryInterface(IID_PPV_ARGS(&buffer_byte_access));
-                byte* raw_buffer = nullptr;
-                buffer_byte_access->Buffer(&raw_buffer);
+                auto raw_buffer = buffer.data();
                 std::memcpy(buf, raw_buffer, size);
             }
             p->set_value(size);

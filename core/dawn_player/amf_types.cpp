@@ -1,12 +1,13 @@
 /*
  *    amf_types.cpp:
  *
- *    Copyright (C) 2015-2017 Light Lin <blog.poxiao.me> All Rights Reserved.
+ *    Copyright (C) 2015-2024 Light Lin <blog.poxiao.me> All Rights Reserved.
  *
  */
 
 #include <algorithm>
 #include <cassert>
+#include <stdexcept>
 
 #include "amf_types.hpp"
 
@@ -292,6 +293,7 @@ size_t amf_strict_array::size() const
 }
 
 amf_date::amf_date(double value)
+    : _value(value)
 {
 }
 
