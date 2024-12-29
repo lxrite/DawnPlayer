@@ -2,7 +2,7 @@
 <package >
   <metadata>
     <id>DawnPlayer</id>
-    <version>1.1.0</version>
+    <version>1.1.1</version>
     <title>DawnPlayer</title>
     <authors>Light Lin</authors>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
@@ -23,11 +23,11 @@
 
       <file src="ARM\Release\DawnPlayer\DawnPlayer.dll" target="runtimes\win-arm\native/DawnPlayer.dll"/>
 
-      <file src="ARM64\Release\DawnPlayer\DawnPlayer.dll" target="runtimes\win-arm64\native/DawnPlayer.dll"/>
+      <file src="ARM64\Release\DawnPlayer\DawnPlayer.dll" target="runtimes\win-arm64\native\DawnPlayer.dll"/>
 
-      <file src="x64\Release\DawnPlayer\DawnPlayer.dll" target="runtimes\win-x64\native/DawnPlayer.dll"/>
+      <file src="x64\Release\DawnPlayer\DawnPlayer.dll" target="runtimes\win-x64\native\DawnPlayer.dll"/>
 
-      <file src="Release\DawnPlayer\DawnPlayer.dll" target="runtimes\winx86\native/DawnPlayer.dll"/>
+      <file src="Release\DawnPlayer\DawnPlayer.dll" target="runtimes\win-x86\native\DawnPlayer.dll"/>
 
       <file src="DawnPlayer.targets" target="build\native"/>
   </files>
