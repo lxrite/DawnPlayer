@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package >
+  <metadata>
+    <id>DawnPlayer</id>
+    <version>1.1.0</version>
+    <title>DawnPlayer</title>
+    <authors>Light Lin</authors>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <license type="expression">MIT</license>
+    <projectUrl>https://github.com/lxrite/DawnPlayer</projectUrl>
+    <description>A FLV playback library for Windows 10+ UWP and WinUI 3 Apps.</description>
+    <tags>flv demuxer</tags>
+    <dependencies>
+      <group targetFramework="uap10.0" />
+      <group targetFramework="net6.0-windows10.0.18362.0" />
+    </dependencies>
+  </metadata>
+
+  <files>
+      <file src="Release\DawnPlayer\DawnPlayer.winmd" target="lib\uap10.0\DawnPlayer.winmd"/>
+
+      <file src="DawnPlayer.DotNet\bin\Release\net6.0-windows10.0.18362.0\DawnPlayer.DotNet.dll" target="lib\net6.0-windows10.0.18362.0\DawnPlayer.DotNet.dll" />
+
+      <file src="ARM\Release\DawnPlayer\DawnPlayer.dll" target="runtimes\win-arm\native/DawnPlayer.dll"/>
+
+      <file src="ARM64\Release\DawnPlayer\DawnPlayer.dll" target="runtimes\win-arm64\native/DawnPlayer.dll"/>
+
+      <file src="x64\Release\DawnPlayer\DawnPlayer.dll" target="runtimes\win-x64\native/DawnPlayer.dll"/>
+
+      <file src="Release\DawnPlayer\DawnPlayer.dll" target="runtimes\winx86\native/DawnPlayer.dll"/>
+
+      <file src="DawnPlayer.targets" target="build\native"/>
+  </files>
+</package>

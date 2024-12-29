@@ -13,6 +13,7 @@ This library allows you to extend the functionality of `MediaPlayerElement` and 
 * Microsoft Visual Studio 2022
 
 ### Usage
+Download the DawnPlayer NuGet package here: https://www.nuget.org/packages/DawnPlayer/
 
 XAML
 ``` xml
