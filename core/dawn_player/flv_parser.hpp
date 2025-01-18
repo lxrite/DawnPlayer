@@ -1,7 +1,7 @@
 /*
  *    flv_parser.hpp:
  *
- *    Copyright (C) 2015-2017 Light Lin <blog.poxiao.me> All Rights Reserved.
+ *    Copyright (C) 2015-2025 Light Lin <blog.poxiao.me> All Rights Reserved.
  *
  */
 
@@ -16,6 +16,13 @@
 #include "samples.hpp"
 
 namespace dawn_player {
+
+enum class video_codec {
+    unknown,
+    h264, // AVC/H.264
+    hevc, // HEVC/H.265
+};
+
 namespace parser {
 
 enum class parse_result {
@@ -50,12 +57,14 @@ public:
     std::function<bool(std::shared_ptr<dawn_player::amf::amf_base>, std::shared_ptr<dawn_player::amf::amf_base>)> on_script_tag;
     std::function<bool(const audio_special_config&)> on_audio_specific_config;
     std::function<bool(const std::vector<std::uint8_t>&, const std::vector<std::uint8_t>&)> on_avc_decoder_configuration_record;
+    std::function<bool(const std::vector<std::uint8_t>&, const std::vector<std::uint8_t>&, const std::vector<std::uint8_t>&)> on_hevc_decoder_configuration_record;
     std::function<bool(dawn_player::sample::audio_sample&&)> on_audio_sample;
     std::function<bool(dawn_player::sample::video_sample&&)> on_video_sample;
 private:
     std::uint32_t to_uint32_be(const std::uint8_t* data);
     std::uint32_t to_uint24_be(const std::uint8_t* data);
     std::uint16_t to_uint16_be(const std::uint8_t* data);
+    bool is_hevc_codec_id(std::uint8_t codec_id) const;
 };
 
 } // namespace parser

@@ -1,7 +1,7 @@
 /*
  *    flv_player.hpp:
  *
- *    Copyright (C) 2015-2017 Light Lin <blog.poxiao.me> All Rights Reserved.
+ *    Copyright (C) 2015-2025 Light Lin <blog.poxiao.me> All Rights Reserved.
  *
  */
 
@@ -40,7 +40,7 @@ class flv_player : public std::enable_shared_from_this<flv_player> {
     bool is_video_cfg_read;
     bool is_audio_cfg_read;
     std::string audio_codec_private_data;
-    std::string video_codec_private_data;
+    std::vector<std::uint8_t> vps;
     std::vector<std::uint8_t> sps;
     std::vector<std::uint8_t> pps;
     bool is_closed;
@@ -58,6 +58,7 @@ class flv_player : public std::enable_shared_from_this<flv_player> {
     bool first_sample_timestamp_has_value;
     std::int64_t first_sample_timestamp;
     bool can_seek;
+    video_codec video_codec_ = video_codec::unknown;
 
 public:
     explicit flv_player(const std::shared_ptr<task_service>& task_service, const std::shared_ptr<read_stream_proxy>& stream_proxy);
@@ -67,9 +68,11 @@ public:
     std::future<video_sample> get_video_sample();
     std::future<std::int64_t> seek(std::int64_t seek_to_time);
     std::future<void> close();
+    const std::vector<std::uint8_t>& get_vps() const;
     const std::vector<std::uint8_t>& get_sps() const;
     const std::vector<std::uint8_t>& get_pps() const;
     const std::shared_ptr<task_service> get_task_service() const;
+    video_codec get_video_codec() const;
 
 private:
     std::future<std::uint32_t> read_some_data();
@@ -83,6 +86,7 @@ private:
 private:
     bool on_script_tag(std::shared_ptr<amf_base> name, std::shared_ptr<amf_base> value);
     bool on_avc_decoder_configuration_record(const std::vector<std::uint8_t>& sps, const std::vector<std::uint8_t>& pps);
+    bool on_hevc_decoder_configuration_record(const std::vector<std::uint8_t>& vps, const std::vector<std::uint8_t>& sps, const std::vector<std::uint8_t>& pps);
     bool on_audio_specific_config(const audio_special_config& asc);
     bool on_audio_sample(audio_sample&& sample);
     bool on_video_sample(video_sample&& sample);

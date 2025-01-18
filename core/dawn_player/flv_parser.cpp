@@ -1,7 +1,7 @@
 /*
  *    flv_parser.cpp:
  *
- *    Copyright (C) 2015-2017 Light Lin <blog.poxiao.me> All Rights Reserved.
+ *    Copyright (C) 2015-2025 Light Lin <blog.poxiao.me> All Rights Reserved.
  *
  */
 
@@ -186,7 +186,7 @@ parse_result flv_parser::parse_flv_tags(const std::uint8_t* data, size_t size, s
             // SoundData      UI8[size of sound data] if SoundFormat == 10
             //                                          AACAUDIODATA
             //                                        else
-            //                                          Sound data¡ªvaries by format
+            //                                          Sound dataï¿½ï¿½varies by format
             if (sound_format_flag == 0x02) {
                 // MP3
                 if (tag_data_offset + tag_data_size - offset < 4) {
@@ -408,7 +408,7 @@ parse_result flv_parser::parse_flv_tags(const std::uint8_t* data, size_t size, s
             //                       6: Screen video version 2
             //                       7: AVC 
             auto codec_id = data[offset++] & 0x0f;
-            if (codec_id != 7) {
+            if (codec_id != 7 && !this->is_hevc_codec_id(codec_id)) {
                 return parse_result::error;
             }
             
@@ -566,6 +566,168 @@ parse_result flv_parser::parse_flv_tags(const std::uint8_t* data, size_t size, s
                 }
                 offset = tag_data_offset + tag_data_size;
             }
+            else if (this->is_hevc_codec_id(codec_id)) {
+                // HEVCVIDEOPACKET
+                if (tag_data_offset + tag_data_size < offset + 4) {
+                    return parse_result::error;
+                }
+                auto hevc_packet_type = data[offset++];
+                auto composition_time = this->to_uint24_be(&data[offset]);
+                offset += 3;
+                if (hevc_packet_type == 0) {
+                    if (tag_data_offset + tag_data_size < offset + 23) {
+                        return parse_result::error;
+                    }
+                    // HEVCDecoderConfigurationRecord ISO/IEC 14496-15
+                    // configurationVersion unsigned int(8)
+                    auto configuration_version = data[offset++];
+                    if (configuration_version != 1) {
+                        return parse_result::error;
+                    }
+                    // general_profile_space unsigned int(2)
+                    // general_tier_flag unsigned int(1)
+                    // general_profile_idc unsigned int(5)
+                    offset += 1;
+                    // general_profile_compatibility_flags unsigned int(32)
+                    offset += 4;
+                    // general_constraint_indicator_flags unsigned int(48)
+                    offset += 6;
+                    // general_level_idc unsigned int(8)
+                    offset += 1;
+                    // reserved = '1111'b bit(4)
+                    // min_spatial_segmentation_idc unsigned int(12)
+                    offset += 2;
+                    // reserved = '111111'b bit(6)
+                    // parallelismType unsigned int(2)
+                    offset += 1;
+                    // reserved = '111111'b bit(6)
+                    // chroma_format_idc unsigned int(2)
+                    offset += 1;
+                    // reserved = '11111'b bit(5)
+                    // bit_depth_luma_minus8 unsigned int(3)
+                    offset += 1;
+                    // reserved = '11111'b bit(5)
+                    // bit_depth_chroma_minus8 unsigned int(3)
+                    offset += 1;
+                    // avgFrameRate bit(16)
+                    offset += 2;
+                    // constantFrameRate bit(2)
+                    // numTemporalLayers bit(3)
+                    // temporalIdNested bit(1)
+                    // lengthSizeMinusOne unsigned int(2)
+                    auto length_size_minus_one_flag = data[offset++] & 0x03;
+                    switch (length_size_minus_one_flag) {
+                    case 0:
+                        this->length_size_minus_one = 1;
+                        break;
+                    case 1:
+                        this->length_size_minus_one = 2;
+                        break;
+                    case 3:
+                        this->length_size_minus_one = 4;
+                        break;
+                    default:
+                        return parse_result::error;
+                    }
+                    // numOfArrays unsigned int(8)
+                    auto num_arrays = static_cast<std::uint32_t>(data[offset++]);
+                    std::vector<std::uint8_t> vps;
+                    std::vector<std::uint8_t> sps;
+                    std::vector<std::uint8_t> pps;
+                    for (std::uint32_t i = 0; i < num_arrays; ++i) {
+                        if (tag_data_offset + tag_data_size < offset + 3) {
+                            return parse_result::error;
+                        }
+                        // array_completeness bit(1)
+                        // reserved = 0 unsigned int(1)
+                        // NAL_unit_type unsigned int(6)
+                        auto nalu_type = data[offset++] & 0b00111111;
+                        // numNalus unsigned int(16)
+                        auto num_nalus = static_cast<std::uint32_t>(this->to_uint16_be(data + offset));
+                        offset += 2;
+                        for (std::uint32_t j = 0; j < num_nalus; ++j) {
+                            if (tag_data_offset + tag_data_size < offset + 2) {
+                                return parse_result::error;
+                            }
+                            // nalUnitLength unsigned int(16)
+                            std::uint16_t nalu_length = this->to_uint16_be(data + offset);
+                            // nalUnit bit(8*nalUnitLength)
+                            offset += 2;
+                            if (tag_data_offset + tag_data_size < offset + nalu_length) {
+                                return parse_result::error;
+                            }
+                            switch (nalu_type) {
+                            case 32:
+                                std::copy(data + offset, data + offset + nalu_length, std::back_inserter(vps));
+                                break;
+                            case 33:
+                                std::copy(data + offset, data + offset + nalu_length, std::back_inserter(sps));
+                                break;
+                            case 34:
+                                std::copy(data + offset, data + offset + nalu_length, std::back_inserter(pps));
+                                break;
+                            default:
+                                // ignore
+                                break;
+                            }
+                            offset += nalu_length;
+                        }
+                    }
+                    if (this->on_hevc_decoder_configuration_record) {
+                        if (!this->on_hevc_decoder_configuration_record(vps, sps, pps)) {
+                            return parse_result::abort;
+                        }
+                    }
+                }
+                else if (hevc_packet_type == 1) {
+                    // One or more NALUs
+                    if (this->on_video_sample) {
+                        dawn_player::sample::video_sample sample;
+                        if (this->length_size_minus_one == 0) {
+                            return parse_result::error;
+                        }
+                        std::uint32_t nalu_length = 0;
+                        sample.dts = static_cast<std::int64_t>(static_cast<std::uint32_t>(timestamp | (timestamp_extended << 24))) * 10000;
+                        sample.timestamp = sample.dts + composition_time * 10000;
+                        sample.is_key_frame = is_key_frame;
+                        while (tag_data_size > offset - tag_data_offset) {
+                            if (tag_data_size - (offset - tag_data_offset) < this->length_size_minus_one) {
+                                return parse_result::error;
+                            }
+                            if (this->length_size_minus_one == 1) {
+                                nalu_length = data[offset++];
+                            }
+                            else if (this->length_size_minus_one == 2) {
+                                nalu_length = this->to_uint16_be(&data[offset]);
+                                offset += 2;
+                            }
+                            else {
+                                assert(this->length_size_minus_one == 4);
+                                nalu_length = this->to_uint32_be(&data[offset]);
+                                offset += 4;
+                            }
+                            if (nalu_length > tag_data_offset + tag_data_size - offset || nalu_length == 0) {
+                                return parse_result::error;
+                            }
+                            sample.data.push_back(0x00);
+                            sample.data.push_back(0x00);
+                            sample.data.push_back(0x01);
+                            std::copy(&data[offset], &data[offset + nalu_length], std::back_inserter(sample.data));
+                            offset += nalu_length;
+                        }
+                        if (!this->on_video_sample(std::move(sample))) {
+                            return parse_result::abort;
+                        }
+                    }
+                }
+                else if (hevc_packet_type == 2) {
+                    // do nothing
+                }
+                else {
+                    return parse_result::error;
+                }
+                offset = tag_data_offset + tag_data_size;
+            }
             else {
                 assert(false);
             }
@@ -634,6 +796,11 @@ std::uint16_t flv_parser::to_uint16_be(const std::uint8_t* data)
     cvt.from[1] = data[0];
     cvt.from[0] = data[1];
     return cvt.to;
+}
+
+bool flv_parser::is_hevc_codec_id(std::uint8_t codec_id) const
+{
+    return codec_id == 12;
 }
 
 } // namespace parser

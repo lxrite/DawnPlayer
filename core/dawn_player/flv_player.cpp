@@ -1,7 +1,7 @@
 /*
  *    flv_player.cpp:
  *
- *    Copyright (C) 2015-2017 Light Lin <blog.poxiao.me> All Rights Reserved.
+ *    Copyright (C) 2015-2025 Light Lin <blog.poxiao.me> All Rights Reserved.
  *
  */
 
@@ -149,6 +149,11 @@ std::future<void> flv_player::close()
     this->is_closed = true;
 }
 
+const std::vector<std::uint8_t>& flv_player::get_vps() const
+{
+    return this->vps;
+}
+
 const std::vector<std::uint8_t>& flv_player::get_sps() const
 {
     return this->sps;
@@ -162,6 +167,11 @@ const std::vector<std::uint8_t>& flv_player::get_pps() const
 const std::shared_ptr<task_service> flv_player::get_task_service() const
 {
     return this->tsk_service;
+}
+
+video_codec flv_player::get_video_codec() const
+{
+    return this->video_codec_;
 }
 
 std::future<std::uint32_t> flv_player::read_some_data()
@@ -366,10 +376,6 @@ std::map<std::string, std::string> flv_player::get_video_info()
     }
     info["Height"] = std::to_string(height->get_value());
     info["Width"] = std::to_string(width->get_value());
-
-    // Only surpport AVC
-    info["VideoFourCC"] = std::string("H264");
-    info["VideoCodecPrivateData"] = video_codec_private_data;
     return info;
 }
 
@@ -438,14 +444,19 @@ bool flv_player::on_script_tag(std::shared_ptr<amf_base> name, std::shared_ptr<a
 
 bool flv_player::on_avc_decoder_configuration_record(const std::vector<std::uint8_t>& sps, const std::vector<std::uint8_t>& pps)
 {
+    this->video_codec_ = video_codec::h264;
     this->sps = sps;
     this->pps = pps;
-    this->video_codec_private_data;
-    std::uint8_t prefix[3] = { 0x00, 0x00, 0x01 };
-    this->video_codec_private_data += this->uint8_to_hex_string(prefix, sizeof(prefix));
-    this->video_codec_private_data += this->uint8_to_hex_string(sps.data(), sps.size());
-    this->video_codec_private_data += this->uint8_to_hex_string(prefix, sizeof(prefix));
-    this->video_codec_private_data += this->uint8_to_hex_string(pps.data(), pps.size());
+    this->is_video_cfg_read = true;
+    return true;
+}
+
+bool flv_player::on_hevc_decoder_configuration_record(const std::vector<std::uint8_t>& vps, const std::vector<std::uint8_t>& sps, const std::vector<std::uint8_t>& pps)
+{
+    this->video_codec_ = video_codec::hevc;
+    this->vps = vps;
+    this->sps = sps;
+    this->pps = pps;
     this->is_video_cfg_read = true;
     return true;
 }
@@ -495,6 +506,7 @@ void flv_player::register_callback_functions(bool sample_only)
     if (sample_only) {
         this->parser.on_script_tag = nullptr;
         this->parser.on_avc_decoder_configuration_record = nullptr;
+        this->parser.on_hevc_decoder_configuration_record = nullptr;
         this->parser.on_audio_specific_config = nullptr;
     }
     else {
@@ -503,6 +515,9 @@ void flv_player::register_callback_functions(bool sample_only)
         };
         this->parser.on_avc_decoder_configuration_record = [this](const std::vector<std::uint8_t>& sps, const std::vector<std::uint8_t>& pps) -> bool {
             return this->on_avc_decoder_configuration_record(sps, pps);
+        };
+        this->parser.on_hevc_decoder_configuration_record = [this](const std::vector<std::uint8_t>& vps, const std::vector<std::uint8_t>& sps, const std::vector<std::uint8_t>& pps) -> bool {
+            return this->on_hevc_decoder_configuration_record(vps, sps, pps);
         };
         this->parser.on_audio_specific_config = [this](const audio_special_config& asc) -> bool {
             return this->on_audio_specific_config(asc);

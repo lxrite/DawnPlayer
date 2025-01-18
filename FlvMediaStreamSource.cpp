@@ -1,14 +1,13 @@
 ﻿/*
  *    FlvMediaStreamSource.cpp:
  *
- *    Copyright (C) 2024 Light Lin <blog.poxiao.me> All Rights Reserved.
+ *    Copyright (C) 2024-2025 Light Lin <blog.poxiao.me> All Rights Reserved.
  *
  */
 
 #include "FlvMediaStreamSource.h"
 #include "FlvMediaStreamSource.g.cpp"
 
-#include <winrt/Windows.Media.MediaProperties.h>
 #include <winrt/base.h>
 #include <ppltasks.h>
 #include <winerror.h>
@@ -16,7 +15,6 @@
 #include "core/dawn_player/default_task_service.hpp"
 #include "core/dawn_player/error.hpp"
 
-using namespace winrt::Windows::Media::MediaProperties;
 using namespace concurrency;
 using namespace dawn_player;
 
@@ -102,7 +100,7 @@ namespace winrt::DawnPlayer::implementation
             aep = AudioEncodingProperties::CreateAac(sample_rate, channel_count, bit_rate);
         }
         auto asd = AudioStreamDescriptor(aep);
-        auto vep = VideoEncodingProperties::CreateH264();
+        auto vep = FlvMediaStreamSource::CreateVideoEncodingProperties(player->get_video_codec());
         auto video_width = std::stoul(info["Width"]);
         auto video_height = std::stoul(info["Height"]);
         // It seems that H.264 only supports even numbered dimensions.
@@ -176,6 +174,17 @@ namespace winrt::DawnPlayer::implementation
                     video_sample sample = player->get_video_sample().get();
                     auto data_writer = DataWriter();
                     if (sample.is_key_frame) {
+                        if (player->get_video_codec() == video_codec::hevc) {
+                            const auto& vps = player->get_vps();
+                            if (!vps.empty()) {
+                                data_writer.WriteByte(0);
+                                data_writer.WriteByte(0);
+                                data_writer.WriteByte(1);
+                                for (auto byte : vps) {
+                                    data_writer.WriteByte(byte);
+                                }
+                            }
+                        }
                         const auto& sps = player->get_sps();
                         if (!sps.empty()) {
                             data_writer.WriteByte(0);
@@ -213,5 +222,16 @@ namespace winrt::DawnPlayer::implementation
                 }
             }
         }
+    }
+
+    VideoEncodingProperties FlvMediaStreamSource::CreateVideoEncodingProperties(video_codec vc)
+    {
+        switch (vc) {
+        case video_codec::hevc:
+            return VideoEncodingProperties::CreateHevc();
+        default:
+            return VideoEncodingProperties::CreateH264();
+        }
+        
     }
 }

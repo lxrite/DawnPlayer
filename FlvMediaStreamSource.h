@@ -1,7 +1,7 @@
 ﻿/*
  *    FlvMediaStreamSource.h:
  *
- *    Copyright (C) 2024 Light Lin <blog.poxiao.me> All Rights Reserved.
+ *    Copyright (C) 2024-2025 Light Lin <blog.poxiao.me> All Rights Reserved.
  *
  */
 
@@ -14,6 +14,7 @@
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Media.Core.h>
 #include <winrt/Windows.Storage.Streams.h>
+#include <winrt/Windows.Media.MediaProperties.h>
 
 #include "core/dawn_player/flv_player.hpp"
 #include "core/dawn_player/io.hpp"
@@ -24,9 +25,11 @@
 using namespace winrt::Windows::Foundation;
 using namespace winrt::Windows::Media::Core;
 using namespace winrt::Windows::Storage::Streams;
+using namespace winrt::Windows::Media::MediaProperties;
 
 using dawn_player::flv_player;
 using dawn_player::io::read_stream_proxy;
+using dawn_player::video_codec;
 
 namespace winrt::DawnPlayer::implementation
 {
@@ -50,6 +53,7 @@ namespace winrt::DawnPlayer::implementation
         void handle_sample_requested(MediaStreamSource sender, MediaStreamSourceSampleRequestedEventArgs args);
         std::optional<winrt::event_token> starting_event_token;
         std::optional<winrt::event_token> sample_requested_event_token;
+        static VideoEncodingProperties CreateVideoEncodingProperties(video_codec vc);
     };
 }
 
