@@ -152,10 +152,10 @@
     <ClInclude Include="core\dawn_player\error.hpp" />
     <ClInclude Include="core\dawn_player\flv_parser.hpp" />
     <ClInclude Include="core\dawn_player\flv_player.hpp" />
+    <ClInclude Include="core\dawn_player\future_coroutine.hpp" />
     <ClInclude Include="core\dawn_player\io.hpp" />
     <ClInclude Include="core\dawn_player\samples.hpp" />
     <ClInclude Include="core\dawn_player\task_service.hpp" />
-    <ClInclude Include="future_coroutine.hpp" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="FlvMediaStreamSource.h">
       <DependentUpon>FlvMediaStreamSource.idl</DependentUpon>
