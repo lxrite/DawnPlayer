@@ -72,6 +72,9 @@
     <ClInclude Include="core\dawn_player\task_service.hpp">
       <Filter>core\dawn_player</Filter>
     </ClInclude>
+    <ClInclude Include="future_coroutine.hpp">
+      <Filter>core\dawn_player</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Midl Include="FlvMediaStreamSource.idl" />

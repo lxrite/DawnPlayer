@@ -1,14 +1,14 @@
 /*
 *    task_service.hpp:
 *
-*    Copyright (C) 2015-2017 Light Lin <blog.poxiao.me> All Rights Reserved.
+*    Copyright (C) 2015-2025 Light Lin <blog.poxiao.me> All Rights Reserved.
 *
 */
 
 #ifndef DAWN_PLAYER_TASK_SERVICE_HPP
 #define DAWN_PLAYER_TASK_SERVICE_HPP
 
-#include <experimental/resumable>
+#include <coroutine>
 #include <functional>
 #include <thread>
 
@@ -27,7 +27,7 @@ namespace impl {
         switch_task_service_awaitor(task_service* service);
         bool await_ready();
         void await_resume();
-        void await_suspend(std::experimental::coroutine_handle<> coro);
+        void await_suspend(std::coroutine_handle<> coro);
     };
 }
 

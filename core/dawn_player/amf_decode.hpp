@@ -1,7 +1,7 @@
 /*
  *    amf_decode.hpp:
  *
- *    Copyright (C) 2015-2017 Light Lin <blog.poxiao.me> All Rights Reserved.
+ *    Copyright (C) 2015-2025 Light Lin <blog.poxiao.me> All Rights Reserved.
  *
  */
 
@@ -29,67 +29,92 @@ public:
     }
 };
 
-template <typename RandomeAccessIterator>
-std::shared_ptr<amf_base> decode_amf(RandomeAccessIterator begin, RandomeAccessIterator end)
-{
-    return std::get<0>(decode_amf_and_return_iterator(begin, end));
+template <typename RandomAccessIterator>
+std::pair<amf_number, RandomAccessIterator> decode_amf_number(RandomAccessIterator begin, RandomAccessIterator end);
+
+template <typename RandomAccessIterator>
+std::pair<amf_boolean, RandomAccessIterator> decode_amf_boolean(RandomAccessIterator begin, RandomAccessIterator end);
+
+template <typename RandomAccessIterator>
+std::pair<amf_string, RandomAccessIterator> decode_amf_string(RandomAccessIterator begin, RandomAccessIterator end);
+
+template <typename RandomAccessIterator>
+std::pair<amf_object, RandomAccessIterator> decode_amf_object(RandomAccessIterator begin, RandomAccessIterator end);
+
+template <typename RandomAccessIterator>
+std::pair<amf_ecma_array, RandomAccessIterator> decode_amf_ecma_array(RandomAccessIterator begin, RandomAccessIterator end);
+
+template <typename RandomAccessIterator>
+std::pair<amf_object_end, RandomAccessIterator> decode_amf_object_end(RandomAccessIterator begin, RandomAccessIterator end);
+
+template <typename RandomAccessIterator>
+std::pair<amf_strict_array, RandomAccessIterator> decode_amf_strict_array(RandomAccessIterator begin, RandomAccessIterator end);
+
+template <typename RandomAccessIterator>
+std::pair<amf_date, RandomAccessIterator> decode_amf_date(RandomAccessIterator begin, RandomAccessIterator end);
+
+namespace impl {
+
+template <typename RandomAccessIterator>
+std::pair<amf_string, RandomAccessIterator> decode_amf_string_without_marker(RandomAccessIterator begin, RandomAccessIterator end);
+
 }
 
-template <typename RandomeAccessIterator>
-std::pair<std::shared_ptr<amf_base>, RandomeAccessIterator> decode_amf_and_return_iterator(RandomeAccessIterator begin, RandomeAccessIterator end)
+template <typename RandomAccessIterator>
+std::pair<std::shared_ptr<amf_base>, RandomAccessIterator> decode_amf(RandomAccessIterator begin, RandomAccessIterator end)
 {
     assert(begin <= end);
-    if(begin == end){
+    if (begin == end) {
         throw decode_amf_error("Failed to decode.");
     }
     auto value_type_marker = static_cast<std::uint8_t>(*begin);
-    RandomeAccessIterator next_iter;
+    RandomAccessIterator next_iter;
     if (value_type_marker == 0x00) {
         // amf_number
         auto value_ptr = std::make_shared<amf_number>(0.00);
-        std::tie(*value_ptr, next_iter) = decode_amf_number_and_return_iterator(begin, end);
+        std::tie(*value_ptr, next_iter) = decode_amf_number(begin, end);
         return std::make_pair(value_ptr, next_iter);
     }
     else if (value_type_marker == 0x01) {
         // amf_boolean
         auto value_ptr = std::make_shared<amf_boolean>(false);
-        std::tie(*value_ptr, next_iter) = decode_amf_boolean_and_return_iterator(begin, end);
+        std::tie(*value_ptr, next_iter) = decode_amf_boolean(begin, end);
         return std::make_pair(value_ptr, next_iter);
     }
     else if (value_type_marker == 0x02) {
         // amf_string
         auto value_ptr = std::make_shared<amf_string>();
-        std::tie(*value_ptr, next_iter) = decode_amf_string_and_return_iterator(begin, end);
+        std::tie(*value_ptr, next_iter) = decode_amf_string(begin, end);
         return std::make_pair(value_ptr, next_iter);
     }
     else if (value_type_marker == 0x03) {
         // amf_object
         auto value_ptr = std::make_shared<amf_object>();
-        std::tie(*value_ptr, next_iter) = decode_amf_object_and_return_iterator(begin, end);
+        std::tie(*value_ptr, next_iter) = decode_amf_object(begin, end);
         return std::make_pair(value_ptr, next_iter);
     }
     else if (value_type_marker == 0x08) {
         // amf_ecma_array
         auto value_ptr = std::make_shared<amf_ecma_array>();
-        std::tie(*value_ptr, next_iter) = decode_amf_ecma_array_and_return_iterator(begin, end);
+        std::tie(*value_ptr, next_iter) = decode_amf_ecma_array(begin, end);
         return std::make_pair(value_ptr, next_iter);
     }
     else if (value_type_marker == 0x09) {
         // amf_object_end
         auto value_ptr = std::make_shared<amf_object_end>();
-        std::tie(*value_ptr, next_iter) = decode_amf_object_end_and_return_iterator(begin, end);
+        std::tie(*value_ptr, next_iter) = decode_amf_object_end(begin, end);
         return std::make_pair(value_ptr, next_iter);
     }
     else if (value_type_marker == 0x0a) {
         // amf_strict_array
         auto value_ptr = std::make_shared<amf_strict_array>();
-        std::tie(*value_ptr, next_iter) = decode_amf_strict_array_and_return_iterator(begin, end);
+        std::tie(*value_ptr, next_iter) = decode_amf_strict_array(begin, end);
         return std::make_pair(value_ptr, next_iter);
     }
     else if (value_type_marker == 0x0b) {
         // amf_date
         auto value_ptr = std::make_shared<amf_date>(0.00);
-        std::tie(*value_ptr, next_iter) = decode_amf_date_and_return_iterator(begin, end);
+        std::tie(*value_ptr, next_iter) = decode_amf_date(begin, end);
         return std::make_pair(value_ptr, next_iter);
     }
     else {
@@ -98,7 +123,7 @@ std::pair<std::shared_ptr<amf_base>, RandomeAccessIterator> decode_amf_and_retur
 }
 
 template <typename RandomAccessIterator>
-std::pair<amf_number, RandomAccessIterator> decode_amf_number_and_return_iterator(RandomAccessIterator begin, RandomAccessIterator end)
+std::pair<amf_number, RandomAccessIterator> decode_amf_number(RandomAccessIterator begin, RandomAccessIterator end)
 {
     assert(begin <= end);
     if (std::distance(begin, end) < 9) {
@@ -127,13 +152,7 @@ std::pair<amf_number, RandomAccessIterator> decode_amf_number_and_return_iterato
 }
 
 template <typename RandomAccessIterator>
-amf_number decode_amf_number(RandomAccessIterator begin, RandomAccessIterator end)
-{
-    return std::get<0>(decode_amf_number_and_return_iterator(begin, end));
-}
-
-template <typename RandomAccessIterator>
-std::pair<amf_boolean, RandomAccessIterator> decode_amf_boolean_and_return_iterator(RandomAccessIterator begin, RandomAccessIterator end)
+std::pair<amf_boolean, RandomAccessIterator> decode_amf_boolean(RandomAccessIterator begin, RandomAccessIterator end)
 {
     assert(begin <= end);
     if (std::distance(begin, end) < 2) {
@@ -152,13 +171,7 @@ std::pair<amf_boolean, RandomAccessIterator> decode_amf_boolean_and_return_itera
 }
 
 template <typename RandomAccessIterator>
-amf_boolean decode_amf_boolean(RandomAccessIterator begin, RandomAccessIterator end)
-{
-    return std::get<0>(decode_amf_boolean_and_return_iterator(begin, end));
-}
-
-template <typename RandomAccessIterator>
-std::pair<amf_string, RandomAccessIterator> decode_amf_string_and_return_iterator(RandomAccessIterator begin, RandomAccessIterator end)
+std::pair<amf_string, RandomAccessIterator> decode_amf_string(RandomAccessIterator begin, RandomAccessIterator end)
 {
     assert(begin <= end);
     if (std::distance(begin, end) < 3) {
@@ -168,17 +181,11 @@ std::pair<amf_string, RandomAccessIterator> decode_amf_string_and_return_iterato
     if (*iter++ != 0x02) {
         throw decode_amf_error("Failed to decode.");
     }
-    return impl::decode_amf_string_without_marker_and_return_iterator(iter, end);
+    return impl::decode_amf_string_without_marker(iter, end);
 }
 
 template <typename RandomAccessIterator>
-amf_string decode_amf_string(RandomAccessIterator begin, RandomAccessIterator end)
-{
-    return std::get<0>(decode_amf_string_and_return_iterator(begin, end));
-}
-
-template <typename RandomAccessIterator>
-std::pair<amf_object, RandomAccessIterator> decode_amf_object_and_return_iterator(RandomAccessIterator begin, RandomAccessIterator end)
+std::pair<amf_object, RandomAccessIterator> decode_amf_object(RandomAccessIterator begin, RandomAccessIterator end)
 {
     assert(begin <= end);
     if (begin == end) {
@@ -191,9 +198,9 @@ std::pair<amf_object, RandomAccessIterator> decode_amf_object_and_return_iterato
     amf_object obj;
     for (;;) {
         amf_string property_name;
-        std::tie(property_name, iter) = impl::decode_amf_string_without_marker_and_return_iterator(iter, end);
+        std::tie(property_name, iter) = impl::decode_amf_string_without_marker(iter, end);
         std::shared_ptr<amf_base> value_ptr;
-        std::tie(value_ptr, iter) = decode_amf_and_return_iterator(iter, end);
+        std::tie(value_ptr, iter) = decode_amf(iter, end);
         if (property_name.empty() || value_ptr->get_type() == amf_type::object_end) {
             break;
         }
@@ -203,13 +210,7 @@ std::pair<amf_object, RandomAccessIterator> decode_amf_object_and_return_iterato
 }
 
 template <typename RandomAccessIterator>
-std::pair<amf_object, RandomAccessIterator> decode_amf_object(RandomAccessIterator begin, RandomAccessIterator end)
-{
-    return std::get<0>(decode_amf_object_and_return_iterator(begin, end));
-}
-
-template <typename RandomAccessIterator>
-std::pair<amf_ecma_array, RandomAccessIterator> decode_amf_ecma_array_and_return_iterator(RandomAccessIterator begin, RandomAccessIterator end)
+std::pair<amf_ecma_array, RandomAccessIterator> decode_amf_ecma_array(RandomAccessIterator begin, RandomAccessIterator end)
 {
     assert(begin <= end);
     if (std::distance(begin, end) < 5) {
@@ -233,9 +234,9 @@ std::pair<amf_ecma_array, RandomAccessIterator> decode_amf_ecma_array_and_return
     auto cnt = cvt.to;
     for (auto i = 0u; i < cnt; ++i) {
         amf_string key;
-        std::tie(key, iter) = impl::decode_amf_string_without_marker_and_return_iterator(iter, end);
+        std::tie(key, iter) = impl::decode_amf_string_without_marker(iter, end);
         std::shared_ptr<amf_base> value_ptr;
-        std::tie(value_ptr, iter) = decode_amf_and_return_iterator(iter, end);
+        std::tie(value_ptr, iter) = decode_amf(iter, end);
         if (value_ptr->get_type() == amf_type::object_end) {
             break;
         }
@@ -245,13 +246,7 @@ std::pair<amf_ecma_array, RandomAccessIterator> decode_amf_ecma_array_and_return
 }
 
 template <typename RandomAccessIterator>
-amf_ecma_array decode_amf_ecma_array(RandomAccessIterator begin, RandomAccessIterator end)
-{
-    return std::get<0>(decode_amf_ecma_array_and_return_iterator(begin, end));
-}
-
-template <typename RandomAccessIterator>
-std::pair<amf_object_end, RandomAccessIterator> decode_amf_object_end_and_return_iterator(RandomAccessIterator begin, RandomAccessIterator end)
+std::pair<amf_object_end, RandomAccessIterator> decode_amf_object_end(RandomAccessIterator begin, RandomAccessIterator end)
 {
     assert(begin <= end);
     if (begin == end) {
@@ -265,13 +260,7 @@ std::pair<amf_object_end, RandomAccessIterator> decode_amf_object_end_and_return
 }
 
 template <typename RandomAccessIterator>
-amf_object_end decode_amf_object_end(RandomAccessIterator begin, RandomAccessIterator end)
-{
-    return std::get<0>(decode_amf_object_end_and_return_iterator(begin, end));
-}
-
-template <typename RandomAccessIterator>
-std::pair<amf_strict_array, RandomAccessIterator> decode_amf_strict_array_and_return_iterator(RandomAccessIterator begin, RandomAccessIterator end)
+std::pair<amf_strict_array, RandomAccessIterator> decode_amf_strict_array(RandomAccessIterator begin, RandomAccessIterator end)
 {
     assert(begin <= end);
     if (std::distance(begin, end)  < 5) {
@@ -294,20 +283,14 @@ std::pair<amf_strict_array, RandomAccessIterator> decode_amf_strict_array_and_re
     amf_strict_array strict_array;
     for (auto i = 0u; i < cnt; ++i) {
         std::shared_ptr<amf_base> value_ptr;
-        std::tie(value_ptr, iter) = decode_amf_and_return_iterator(iter, end);
+        std::tie(value_ptr, iter) = decode_amf(iter, end);
         strict_array.push_back(value_ptr);
     }
     return std::make_pair(strict_array, iter);
 }
 
 template <typename RandomAccessIterator>
-amf_strict_array decode_amf_strict_array(RandomAccessIterator begin, RandomAccessIterator end)
-{
-    return std::get<0>(decode_amf_strict_array_and_return_iterator(begin, end));
-}
-
-template <typename RandomAccessIterator>
-std::pair<amf_date, RandomAccessIterator> decode_amf_date_and_return_iterator(RandomAccessIterator begin, RandomAccessIterator end)
+std::pair<amf_date, RandomAccessIterator> decode_amf_date(RandomAccessIterator begin, RandomAccessIterator end)
 {
     assert(begin <= end);
     if (std::distance(begin, end) < 11) {
@@ -336,16 +319,10 @@ std::pair<amf_date, RandomAccessIterator> decode_amf_date_and_return_iterator(Ra
     return std::make_pair(amf_date(cvt.to), iter);
 }
 
-template <typename RandomAccessIterator>
-amf_date decode_amf_date(RandomAccessIterator begin, RandomAccessIterator end)
-{
-    return std::get<0>(decode_amf_date_and_return_iterator(begin, end));
-}
-
 namespace impl {
 
 template <typename RandomAccessIterator>
-std::pair<amf_string, RandomAccessIterator> decode_amf_string_without_marker_and_return_iterator(RandomAccessIterator begin, RandomAccessIterator end)
+std::pair<amf_string, RandomAccessIterator> decode_amf_string_without_marker(RandomAccessIterator begin, RandomAccessIterator end)
 {
     assert(std::distance(begin, end) >= 2);
     auto iter = begin;

@@ -1,7 +1,7 @@
 /*
  *    task_service.cpp:
  *
- *    Copyright (C) 2015-2017 Light Lin <blog.poxiao.me> All Rights Reserved.
+ *    Copyright (C) 2015-2025 Light Lin <blog.poxiao.me> All Rights Reserved.
  *
  */
 
@@ -26,7 +26,7 @@ void switch_task_service_awaitor::await_resume()
 {
 }
 
-void switch_task_service_awaitor::await_suspend(std::experimental::coroutine_handle<> coro)
+void switch_task_service_awaitor::await_suspend(std::coroutine_handle<> coro)
 {
     this->tsk_service->post_task([coro]() {
         coro.resume();

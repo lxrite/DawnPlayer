@@ -20,6 +20,7 @@
 
 #include "amf_types.hpp"
 #include "flv_parser.hpp"
+#include "future_coroutine.hpp"
 #include "io.hpp"
 #include "task_service.hpp"
 

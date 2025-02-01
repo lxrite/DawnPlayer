@@ -138,8 +138,8 @@ parse_result flv_parser::parse_flv_tags(const std::uint8_t* data, size_t size, s
             std::shared_ptr<dawn_player::amf::amf_base> meta_data;
             const std::uint8_t* next_iterator;
             try {
-                std::tie(script_name, next_iterator) = dawn_player::amf::decode_amf_and_return_iterator(&data[offset], &data[offset] + tag_data_size);
-                meta_data = dawn_player::amf::decode_amf(next_iterator, &data[offset] + tag_data_size);
+                std::tie(script_name, next_iterator) = dawn_player::amf::decode_amf(&data[offset], &data[offset] + tag_data_size);
+                meta_data = std::get<0>(dawn_player::amf::decode_amf(next_iterator, &data[offset] + tag_data_size));
             }
             catch (const dawn_player::amf::decode_amf_error&) {
                 return parse_result::error;
@@ -186,7 +186,7 @@ parse_result flv_parser::parse_flv_tags(const std::uint8_t* data, size_t size, s
             // SoundData      UI8[size of sound data] if SoundFormat == 10
             //                                          AACAUDIODATA
             //                                        else
-            //                                          Sound data��varies by format
+            //                                          Sound data-varies by format
             if (sound_format_flag == 0x02) {
                 // MP3
                 if (tag_data_offset + tag_data_size - offset < 4) {
