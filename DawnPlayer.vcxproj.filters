@@ -14,6 +14,9 @@
     <Filter Include="core\dawn_player">
       <UniqueIdentifier>{b0afd685-09f5-4de1-999a-b4b3d5161601}</UniqueIdentifier>
     </Filter>
+    <Filter Include="core\dawn_player\coroutine">
+      <UniqueIdentifier>{486b3efd-38cd-42b4-9030-ffb56391d562}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
@@ -72,8 +75,11 @@
     <ClInclude Include="core\dawn_player\task_service.hpp">
       <Filter>core\dawn_player</Filter>
     </ClInclude>
-    <ClInclude Include="core\dawn_player\future_coroutine.hpp">
-      <Filter>core\dawn_player</Filter>
+    <ClInclude Include="core\dawn_player\coroutine\task.hpp">
+      <Filter>core\dawn_player\coroutine</Filter>
+    </ClInclude>
+    <ClInclude Include="core\dawn_player\coroutine\sync_wait.hpp">
+      <Filter>core\dawn_player\coroutine</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

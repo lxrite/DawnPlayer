@@ -1,20 +1,28 @@
 /*
- *    future_coroutine.hpp:
+ *    sync_wait.hpp:
  *
  *    Copyright (C) 2025 Light Lin <blog.poxiao.me> All Rights Reserved.
  *
  */
 
-#ifndef DAWN_PLAYER_FUTURE_COROUTINE_HPP
-#define DAWN_PLAYER_FUTURE_COROUTINE_HPP
+#ifndef DAWN_PLAYER_COROUTINE_SYNC_WAIT_HPP
+#define DAWN_PLAYER_COROUTINE_SYNC_WAIT_HPP
 
 #include <coroutine>
 #include <future>
+#include <type_traits>
 
-// https://en.cppreference.com/w/cpp/coroutine/coroutine_traits
+#include "task.hpp"
+
+namespace dawn_player::coroutine::impl {
+struct as_coroutine;
+}
+
+// Enable the use of std::future<T> as a coroutine type
+// by using a std::promise<T> as the promise type.
 template<typename T, typename... Args>
     requires(!std::is_void_v<T> && !std::is_reference_v<T>)
-struct std::coroutine_traits<std::future<T>, Args...>
+struct std::coroutine_traits<std::future<T>, dawn_player::coroutine::impl::as_coroutine, Args...>
 {
     struct promise_type : std::promise<T>
     {
@@ -44,8 +52,9 @@ struct std::coroutine_traits<std::future<T>, Args...>
     };
 };
 
+// Same for std::future<void>.
 template<typename... Args>
-struct std::coroutine_traits<std::future<void>, Args...>
+struct std::coroutine_traits<std::future<void>, dawn_player::coroutine::impl::as_coroutine, Args...>
 {
     struct promise_type : std::promise<void>
     {
@@ -69,31 +78,31 @@ struct std::coroutine_traits<std::future<void>, Args...>
     };
 };
 
+namespace dawn_player::coroutine {
+namespace impl {
+
+struct as_coroutine {};
+
 template<typename T>
-auto operator co_await(std::future<T> future) noexcept
-    requires(!std::is_reference_v<T>)
+std::future<T> task_to_future(as_coroutine, const task<T>& task)
 {
-    struct awaiter : std::future<T>
-    {
-        bool await_ready() const noexcept
-        {
-            using namespace std::chrono_literals;
-            return this->wait_for(0s) != std::future_status::timeout;
-        }
-
-        void await_suspend(std::coroutine_handle<> cont) const
-        {
-            std::thread([this, cont]
-                {
-                    this->wait();
-                    cont();
-                }).detach();
-        }
-
-        T await_resume() { return this->get(); }
-    };
-
-    return awaiter{ std::move(future) };
+	if constexpr (std::is_void_v<T>) {
+		co_await task;
+		co_return;
+	} else {
+		T result = co_await task;
+		co_return result;
+	}
 }
+
+} // namespace impl
+
+template<typename T>
+T sync_wait_task(const task<T>& task)
+{
+	return impl::task_to_future({}, task).get();
+}
+
+} // namespace dawn_player::coroutine
 
 #endif

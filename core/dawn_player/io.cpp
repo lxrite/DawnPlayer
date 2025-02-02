@@ -1,7 +1,7 @@
 /*
  *    io.cpp:
  *
- *    Copyright (C) 2015-2024 Light Lin <blog.poxiao.me> All Rights Reserved.
+ *    Copyright (C) 2015-2025 Light Lin <blog.poxiao.me> All Rights Reserved.
  *
  */
 
@@ -34,32 +34,15 @@ bool ramdon_access_read_stream_proxy::can_seek() const
     return true;
 }
 
-std::future<std::uint32_t> ramdon_access_read_stream_proxy::read(std::uint8_t* buf, std::uint32_t size)
+coroutine::task<std::uint32_t> ramdon_access_read_stream_proxy::read(std::uint8_t* buf, std::uint32_t size)
 {
-    auto p = std::make_shared<std::promise<std::uint32_t>>();
-    try {
-        auto op = this->target.ReadAsync(Buffer(size), size, InputStreamOptions::Partial);
-        create_task([p, buf, op]() {
-            IBuffer buffer = nullptr;
-            try {
-                buffer = op.get();
-            }
-            catch (...) {
-                p->set_exception(std::current_exception());
-                return;
-            }
-            std::uint32_t size = buffer.Length();
-            if (size != 0) {
-                auto raw_buffer = buffer.data();
-                std::memcpy(buf, raw_buffer, size);
-            }
-            p->set_value(size);
-        });
+    auto buffer = co_await this->target.ReadAsync(Buffer(size), size, InputStreamOptions::Partial);
+    std::uint32_t result = buffer.Length();
+    if (result != 0) {
+        auto raw_buffer = buffer.data();
+        std::memcpy(buf, raw_buffer, result);
     }
-    catch (...) {
-        p->set_exception(std::current_exception());
-    }
-    return p->get_future();
+    co_return result;
 }
 
 void ramdon_access_read_stream_proxy::seek(std::uint64_t pos)
@@ -87,32 +70,15 @@ bool input_read_stream_proxy::can_seek() const
     return false;
 }
 
-std::future<std::uint32_t> input_read_stream_proxy::read(std::uint8_t* buf, std::uint32_t size)
+coroutine::task<std::uint32_t> input_read_stream_proxy::read(std::uint8_t* buf, std::uint32_t size)
 {
-    auto p = std::make_shared<std::promise<std::uint32_t>>();
-    try {
-        auto op = this->target.ReadAsync(Buffer(size), size, InputStreamOptions::Partial);
-        create_task([p, buf, op]() {
-            IBuffer buffer = nullptr;
-            try {
-                buffer = op.get();
-            }
-            catch (...) {
-                p->set_exception(std::current_exception());
-                return;
-            }
-            std::uint32_t size = buffer.Length();
-            if (size != 0) {
-                auto raw_buffer = buffer.data();
-                std::memcpy(buf, raw_buffer, size);
-            }
-            p->set_value(size);
-        });
+    auto buffer = co_await this->target.ReadAsync(Buffer(size), size, InputStreamOptions::Partial);
+    std::uint32_t result = buffer.Length();
+    if (result != 0) {
+        auto raw_buffer = buffer.data();
+        std::memcpy(buf, raw_buffer, result);
     }
-    catch (...) {
-        p->set_exception(std::current_exception());
-    }
-    return p->get_future();
+    co_return result;
 }
 
 void input_read_stream_proxy::seek(std::uint64_t pos)

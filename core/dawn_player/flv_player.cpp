@@ -30,7 +30,7 @@ flv_player::~flv_player()
 {
 }
 
-std::future<std::map<std::string, std::string>> flv_player::open()
+coroutine::task<std::map<std::string, std::string>> flv_player::open()
 {
     co_await switch_to_task_service(this->tsk_service.get());
     co_await this->parse_header();
@@ -40,7 +40,7 @@ std::future<std::map<std::string, std::string>> flv_player::open()
     co_return this->get_video_info();
 }
 
-std::future<audio_sample> flv_player::get_audio_sample()
+coroutine::task<audio_sample> flv_player::get_audio_sample()
 {
     co_await switch_to_task_service(this->tsk_service.get());
     for (;;) {
@@ -57,9 +57,7 @@ std::future<audio_sample> flv_player::get_audio_sample()
             throw get_sample_error("errror ocurred", get_sample_error_code::other);
         }
         if (this->is_sample_reading) {
-            auto p = std::make_shared<std::promise<void>>();
-            this->read_sample_promise_queue.push(p);
-            co_await p->get_future();
+            co_await this->wait_for_read_more_sample_task_compelete();
         }
         else {
             co_await this->read_more_sample();
@@ -71,7 +69,7 @@ std::future<audio_sample> flv_player::get_audio_sample()
     co_return sample;
 }
 
-std::future<video_sample> flv_player::get_video_sample()
+coroutine::task<video_sample> flv_player::get_video_sample()
 {
     co_await switch_to_task_service(this->tsk_service.get());
     for (;;) {
@@ -88,9 +86,7 @@ std::future<video_sample> flv_player::get_video_sample()
             throw get_sample_error("errror ocurred", get_sample_error_code::other);
         }
         if (this->is_sample_reading) {
-            auto p = std::make_shared<std::promise<void>>();
-            this->read_sample_promise_queue.push(p);
-            co_await p->get_future();
+            co_await this->wait_for_read_more_sample_task_compelete();
         }
         else {
             co_await this->read_more_sample();
@@ -102,7 +98,7 @@ std::future<video_sample> flv_player::get_video_sample()
     co_return sample;
 }
 
-std::future<std::int64_t> flv_player::seek(std::int64_t seek_to_time)
+coroutine::task<std::int64_t> flv_player::seek(std::int64_t seek_to_time)
 {
     co_await switch_to_task_service(this->tsk_service.get());
     for (;;) {
@@ -112,9 +108,7 @@ std::future<std::int64_t> flv_player::seek(std::int64_t seek_to_time)
         if (!this->is_sample_reading) {
             break;
         }
-        auto p = std::make_shared<std::promise<void>>();
-        this->read_sample_promise_queue.push(p);
-        co_await p->get_future();
+        co_await this->wait_for_read_more_sample_task_compelete();
         co_await switch_to_task_service(this->tsk_service.get());
     }
     double seek_to_time_sec = static_cast<double>(seek_to_time) / 10000000;
@@ -143,7 +137,7 @@ std::future<std::int64_t> flv_player::seek(std::int64_t seek_to_time)
     co_return static_cast<std::int64_t>(time * 10000000);
 }
 
-std::future<void> flv_player::close()
+coroutine::task<void> flv_player::close()
 {
     co_await switch_to_task_service(this->tsk_service.get());
     this->is_closed = true;
@@ -174,7 +168,7 @@ video_codec flv_player::get_video_codec() const
     return this->video_codec_;
 }
 
-std::future<std::uint32_t> flv_player::read_some_data()
+coroutine::task<std::uint32_t> flv_player::read_some_data()
 {
     co_await switch_to_task_service(this->tsk_service.get());
     const size_t buf_size = 65536;
@@ -188,7 +182,7 @@ std::future<std::uint32_t> flv_player::read_some_data()
     co_return size;
 }
 
-std::future<void> flv_player::parse_header()
+coroutine::task<void> flv_player::parse_header()
 {
     while (this->read_buffer.size() < this->parser.first_tag_offset()) {
         std::uint32_t size = 0;
@@ -212,7 +206,7 @@ std::future<void> flv_player::parse_header()
     this->read_buffer.resize(this->read_buffer.size() - this->parser.first_tag_offset());
 }
 
-std::future<void> flv_player::parse_meta_data()
+coroutine::task<void> flv_player::parse_meta_data()
 {
     for (;;) {
         std::uint32_t size = 0;
@@ -379,7 +373,7 @@ std::map<std::string, std::string> flv_player::get_video_info()
     return info;
 }
 
-std::future<void> flv_player::read_more_sample()
+coroutine::task<void> flv_player::read_more_sample()
 {
     co_await switch_to_task_service(this->tsk_service.get());
     assert(!this->is_sample_reading);
@@ -415,11 +409,39 @@ std::future<void> flv_player::read_more_sample()
         }
     }
     this->is_sample_reading = false;
-    while (!this->read_sample_promise_queue.empty()) {
-        auto p = this->read_sample_promise_queue.front();
-        this->read_sample_promise_queue.pop();
-        p->set_value();
+    while (!this->read_more_sample_complete_callback_queue.empty()) {
+        auto callback = this->read_more_sample_complete_callback_queue.front();
+        this->read_more_sample_complete_callback_queue.pop();
+        callback();
     }
+}
+
+coroutine::task<void> flv_player::wait_for_read_more_sample_task_compelete()
+{
+    co_await switch_to_task_service(this->tsk_service.get());
+    struct awaiter
+    {
+        awaiter(std::function<void(std::function<void()>)> async_wait_func)
+            : async_wait_func_(async_wait_func)
+        {}
+        bool await_ready() { return false; }
+        void await_suspend(std::coroutine_handle<> coro)
+        {
+            this->async_wait_func_([coro]() {
+                coro();
+            });
+        }
+        void await_resume() {}
+    private:
+        std::function<void(std::function<void()>)> async_wait_func_;
+    };
+    co_await awaiter([this](std::function<void()> callback) {
+        if (!this->is_sample_reading) {
+            callback();
+            return;
+        }
+        this->read_more_sample_complete_callback_queue.push(std::move(callback));
+    });
 }
 
 bool flv_player::on_script_tag(std::shared_ptr<amf_base> name, std::shared_ptr<amf_base> value)

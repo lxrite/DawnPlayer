@@ -12,6 +12,7 @@
 #include <ppltasks.h>
 #include <winerror.h>
 
+#include "core/dawn_player/coroutine/sync_wait.hpp"
 #include "core/dawn_player/default_task_service.hpp"
 #include "core/dawn_player/error.hpp"
 
@@ -58,7 +59,9 @@ namespace winrt::DawnPlayer::implementation
         if (this->player_) {
             auto player = this->player_;
             this->player_ = nullptr;
-            player->close();
+            std::thread([player]() {
+                coroutine::sync_wait_task(player->close());
+            }).detach();
         }
         if (this->mss_) {
             if (this->starting_event_token.has_value()) {
@@ -81,7 +84,7 @@ namespace winrt::DawnPlayer::implementation
         auto player = std::make_shared<flv_player>(tsk_service, stream_proxy);
         std::map<std::string, std::string> info;
         try {
-            info = player->open().get();
+            info = coroutine::sync_wait_task(player->open());
         }
         catch (const open_error&) {
             winrt::throw_hresult(E_FAIL);
@@ -137,7 +140,7 @@ namespace winrt::DawnPlayer::implementation
         auto player = this->player_;
         if (start_position != nullptr && player) {
             try {
-                auto seek_to_time = player->seek(start_position.Value().count()).get();
+                auto seek_to_time = coroutine::sync_wait_task(player->seek(start_position.Value().count()));
                 request.SetActualStartPosition(TimeSpan{ seek_to_time });
             }
             catch (const seek_error&) {
@@ -152,7 +155,7 @@ namespace winrt::DawnPlayer::implementation
         if (player) {
             if (request.StreamDescriptor().try_as<AudioStreamDescriptor>()) {
                 try {
-                    auto sample = player->get_audio_sample().get();
+                    auto sample = coroutine::sync_wait_task(player->get_audio_sample());
                     auto data_writer = DataWriter();
                     for (auto byte : sample.data) {
                         data_writer.WriteByte(byte);
@@ -171,7 +174,7 @@ namespace winrt::DawnPlayer::implementation
             }
             else if (request.StreamDescriptor().try_as<VideoStreamDescriptor>()) {
                 try {
-                    video_sample sample = player->get_video_sample().get();
+                    video_sample sample = coroutine::sync_wait_task(player->get_video_sample());
                     auto data_writer = DataWriter();
                     if (sample.is_key_frame) {
                         if (player->get_video_codec() == video_codec::hevc) {

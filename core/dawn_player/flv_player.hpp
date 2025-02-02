@@ -12,15 +12,14 @@
 #include <cstdint>
 #include <deque>
 #include <functional>
-#include <future>
 #include <map>
 #include <memory>
 #include <queue>
 #include <vector>
 
 #include "amf_types.hpp"
+#include "coroutine/task.hpp"
 #include "flv_parser.hpp"
-#include "future_coroutine.hpp"
 #include "io.hpp"
 #include "task_service.hpp"
 
@@ -50,7 +49,7 @@ class flv_player : public std::enable_shared_from_this<flv_player> {
     std::deque<video_sample> video_sample_queue;
     std::map<double, std::uint64_t, std::greater<double>> keyframes;
 
-    std::queue<std::shared_ptr<std::promise<void>>> read_sample_promise_queue;
+    std::queue<std::function<void()>> read_more_sample_complete_callback_queue;
 
     bool is_end_of_stream;
     bool is_error_ocurred;
@@ -64,11 +63,11 @@ class flv_player : public std::enable_shared_from_this<flv_player> {
 public:
     explicit flv_player(const std::shared_ptr<task_service>& task_service, const std::shared_ptr<read_stream_proxy>& stream_proxy);
     virtual ~flv_player();
-    std::future<std::map<std::string, std::string>> open();
-    std::future<audio_sample> get_audio_sample();
-    std::future<video_sample> get_video_sample();
-    std::future<std::int64_t> seek(std::int64_t seek_to_time);
-    std::future<void> close();
+    coroutine::task<std::map<std::string, std::string>> open();
+    coroutine::task<audio_sample> get_audio_sample();
+    coroutine::task<video_sample> get_video_sample();
+    coroutine::task<std::int64_t> seek(std::int64_t seek_to_time);
+    coroutine::task<void> close();
     const std::vector<std::uint8_t>& get_vps() const;
     const std::vector<std::uint8_t>& get_sps() const;
     const std::vector<std::uint8_t>& get_pps() const;
@@ -76,13 +75,14 @@ public:
     video_codec get_video_codec() const;
 
 private:
-    std::future<std::uint32_t> read_some_data();
-    std::future<void> parse_header();
-    std::future<void> parse_meta_data();
+    coroutine::task<std::uint32_t> read_some_data();
+    coroutine::task<void> parse_header();
+    coroutine::task<void> parse_meta_data();
     std::map<std::string, std::string> get_video_info();
 
 private:
-    std::future<void> read_more_sample();
+    coroutine::task<void> read_more_sample();
+    coroutine::task<void> wait_for_read_more_sample_task_compelete();
 
 private:
     bool on_script_tag(std::shared_ptr<amf_base> name, std::shared_ptr<amf_base> value);

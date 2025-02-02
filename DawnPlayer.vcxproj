@@ -148,11 +148,12 @@
   <ItemGroup>
     <ClInclude Include="core\dawn_player\amf_decode.hpp" />
     <ClInclude Include="core\dawn_player\amf_types.hpp" />
+    <ClInclude Include="core\dawn_player\coroutine\sync_wait.hpp" />
+    <ClInclude Include="core\dawn_player\coroutine\task.hpp" />
     <ClInclude Include="core\dawn_player\default_task_service.hpp" />
     <ClInclude Include="core\dawn_player\error.hpp" />
     <ClInclude Include="core\dawn_player\flv_parser.hpp" />
     <ClInclude Include="core\dawn_player\flv_player.hpp" />
-    <ClInclude Include="core\dawn_player\future_coroutine.hpp" />
     <ClInclude Include="core\dawn_player\io.hpp" />
     <ClInclude Include="core\dawn_player\samples.hpp" />
     <ClInclude Include="core\dawn_player\task_service.hpp" />
